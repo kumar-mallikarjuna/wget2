@@ -426,8 +426,9 @@ AC_LINK_IFELSE(
 
 PKG_PROG_PKG_CONFIG
 
-AC_ARG_WITH(gnutls, AS_HELP_STRING([--without-gnutls], [disable GNUTLS SSL support]), with_gnutls=$withval, with_gnutls=yes)
-AS_IF([test "x$with_gnutls" != "xno"], [
+AC_ARG_WITH(ssl, AS_HELP_STRING([--with-ssl], [Use SSL/TLS with specified library. Options: 'gnutls' (default) or 'openssl']), with_ssl=$withval, with_ssl=gnutls)
+
+AS_IF([test "x$with_ssl" == "xgnutls"], [
   PKG_CHECK_MODULES([GNUTLS], [gnutls], [
     with_gnutls=yes
     LIBS="$GNUTLS_LIBS $LIBS"
@@ -438,17 +439,44 @@ AS_IF([test "x$with_gnutls" != "xno"], [
       [with_gnutls=yes; AC_DEFINE([WITH_GNUTLS], [1], [Use GnuTLS])],
       [with_gnutls=no;  AC_MSG_WARN(*** GNUTLS was not found. You will not be able to use HTTPS. Fallback to libnettle for hashing and checksumming.)])
   ])
-  AC_CHECK_HEADERS([gnutls/crypto.h], [], [], [#include <gnutls/gnutls.h>])
+])
 
-  AC_SEARCH_LIBS(gnutls_hash, gnutls, [with_gnutls_hash=yes])
-  AS_IF([test "x$with_gnutls" = xyes], [
-    AC_CHECK_HEADERS([gnutls/ocsp.h])
-    AC_CHECK_FUNCS(gnutls_srp_server_get_username gnutls_transport_get_int)
+AS_IF([test "x$with_ssl" == "xopenssl"], [
+  PKG_CHECK_MODULES([OPENSSL], [openssl], [
+    with_openssl=yes
+    LIBS="$OPENSSL_LIBS $LIBS"
+    CFLAGS="$OPENSSL_CFLAGS $CFLAGS"
+    AC_DEFINE([WITH_OPENSSL], [1], [Use OpenSSL])
+  ], [
+    AC_SEARCH_LIBS(SSL_CTX_new, openssl,
+      [with_openssl=yes; AC_DEFINE([WITH_OPENSSL], [1], [Use OpenSSL])],
+      [with_openssl=no;  AC_MSG_WARN(*** OpenSSL was not found.)])
   ])
 ])
-AM_CONDITIONAL([WITH_GNUTLS], [test "x$with_gnutls" = xyes])
 
-AS_IF([test "x$with_gnutls" != xyes || test "x$with_gnutls_hash" != xyes], [
+AC_SEARCH_LIBS(gnutls_hash, gnutls, [with_gnutls_hash=yes])
+AS_IF([test "x$with_gnutls" = xyes], [
+  AC_CHECK_HEADERS([gnutls/ocsp.h])
+  AC_CHECK_FUNCS(gnutls_srp_server_get_username gnutls_transport_get_int)
+])
+
+AS_IF([test "x$with_ssl" == xopenssl], [
+  AC_CHECK_HEADERS([openssl/ssl.h])
+  AC_CHECK_HEADERS([openssl/x509_vfy.h])
+  AC_CHECK_FUNCS(SSL_new X509_STORE_add_lookup)
+])
+
+AS_IF([test "x$with_gnutls_hash" == xyes],
+  [AC_CHECK_HEADERS([gnutls/crypto.h], [], [], [#include <gnutls/gnutls.h>])])
+
+AS_IF([test "x$with_ssl" != "xgnutls" && test "x$with_ssl" != "xopenssl"],
+  [with_ssl=no],
+  [])
+
+AM_CONDITIONAL([WITH_GNUTLS], [test "x$with_gnutls" = xyes])
+AM_CONDITIONAL([WITH_OPENSSL], [test "x$with_openssl" = xyes])
+
+AS_IF([test "x$with_ssl" == xno || test "x$with_gnutls_hash" != xyes], [
   AC_SEARCH_LIBS(nettle_md5_init, nettle,
     [with_libnettle=yes; AC_DEFINE([WITH_LIBNETTLE], [1], [Use libnettle])],
     [with_libnettle=no;  AC_MSG_WARN(*** LIBNETTLE was not found. Fallback to libgcrypt for hashing and checksumming.)])
@@ -759,7 +787,7 @@ AC_MSG_NOTICE([Summary of build options:
   LDFlags:            ${LDFLAGS}
   Libs:               ${LIBS}
   Library types:      shared=${enable_shared}, static=${enable_static}
-  SSL/TLS support:    $with_gnutls
+  SSL/TLS support:    $with_ssl
   GZIP compression:   $with_zlib
   BZIP2 compression:  $with_bzip2
   LZMA compression:   $with_lzma
