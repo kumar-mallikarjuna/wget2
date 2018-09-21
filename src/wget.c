@@ -721,7 +721,6 @@ static void add_url_to_queue(const char *url, wget_iri_t *base, const char *enco
 
 	if (!blacklist_add(iri)) {
 		// we know this URL already
-		debug_printf("not requesting '%s'. (Already Seen)\n", iri->uri);
 		wget_thread_mutex_unlock(downloader_mutex);
 		plugin_db_forward_url_verdict_free(&plugin_verdict);
 		return;
@@ -888,7 +887,6 @@ static void add_url(JOB *job, const char *encoding, const char *url, int flags)
 	if (!blacklist_add(iri)) {
 		// we know this URL already
 		// iri has been free'd by blacklist_add()
-		debug_printf("not requesting '%s'. (Already Seen)\n", iri->uri);
 		wget_thread_mutex_unlock(downloader_mutex);
 		plugin_db_forward_url_verdict_free(&plugin_verdict);
 		return;
