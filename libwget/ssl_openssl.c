@@ -20,13 +20,16 @@
  */
 
 #include <config.h>
+
+#ifdef WITH_OPENSSL
+
 #include <dirent.h>
 #include <openssl/ssl.h>
 #include <openssl/x509_vfy.h>
 
-#ifdef WITH_OPENSSL
-
 #include <wget.h>
+#include "net.h"
+#include "private.h"
 
 static struct _config
 {
@@ -216,7 +219,7 @@ void wget_ssl_set_config_object(int key, void *value)
 		_config.tls_session_cache = (wget_tls_session_db_t *) value;
 		break;
 	case WGET_SSL_HPKP_CACHE:
-		_config.hpkp_cache = (wget_hpkp_t *) value;
+		_config.hpkp_cache = (wget_hpkp_db_t *) value;
 		break;
 	default:
 		error_printf(_("Unknown configuration key %d (maybe this config value should be of another type?)\n"), key);
@@ -282,7 +285,7 @@ void wget_ssl_set_config_int(int key, int value)
 		_config.ocsp_stapling = value;
 		break;
 	default:
-		error_printf(_("Unknown configuration key %d (maybe this config value should be of another type?)\n"));
+		error_printf(_("Unknown configuration key %d (maybe this config value should be of another type?)\n"), key);
 	}
 }
 
@@ -291,7 +294,7 @@ void wget_ssl_set_config_int(int key, int value)
  */
 static int openssl_load_crl(X509_STORE *store, const char *crl_file)
 {
-	X509_LOOKUP *lookup = X509_STORE_add_lookup(store, X509_lookup_file());
+	X509_LOOKUP *lookup = X509_STORE_add_lookup(store, X509_LOOKUP_file());
 
 	if (!X509_load_crl_file(lookup, crl_file, X509_FILETYPE_PEM))
 		return WGET_E_UNKNOWN;
@@ -308,7 +311,7 @@ static int openssl_set_priorities(SSL_CTX *ctx, const char *prio)
 	 * Default ciphers. This is what will be used
 	 * if 'auto' is specified as the priority (currently the default).
 	 */
-	char *openssl_ciphers = "HIGH:!aNULL:!RC4:!MD5:!SRP:!PSK";
+	const char *openssl_ciphers = "HIGH:!aNULL:!RC4:!MD5:!SRP:!PSK";
 
 	SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
 	SSL_CTX_set_max_proto_version(ctx, TLS_MAX_VERSION);
@@ -322,8 +325,11 @@ static int openssl_set_priorities(SSL_CTX *ctx, const char *prio)
 	else if (!wget_strcasecmp_ascii(prio, "TLSv1_1") &&
 			!SSL_CTX_set_min_proto_version(ctx, TLS1_1_VERSION))
 		goto end;
-	else if (!wget_strcasecmp_ascii(prio, "TLSv1_2") &&
-			!SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION))
+	/*
+	 * Skipping "TLSv1_2".
+	 * Checking for "TLSv1_2" is totally redundant - we already set it as the minimum supported version by default
+	 */
+	else if (!wget_strcasecmp_ascii(prio, "TLSv1_2"))
 		goto end;
 	else if (!wget_strcasecmp_ascii(prio, "TLSv1_3")) {
 		/* OpenSSL supports TLS 1.3 starting at 1.1.1-beta9 (0x10101009) */
@@ -332,17 +338,16 @@ static int openssl_set_priorities(SSL_CTX *ctx, const char *prio)
 			goto end;
 #else
 		info_printf(_("OpenSSL: TLS 1.3 is not supported by your OpenSSL version. Will use TLS 1.2 instead.\n"));
-		if (!SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION))
-			goto end;
+		goto end;
 #endif
 	} else if (!wget_strcasecmp_ascii(prio, "PFS")) {
-		/* Forward-secrecy - Disable RSA! */
+		/* Forward-secrecy - Disable RSA key exchange! */
 		openssl_ciphers = "HIGH:!aNULL:!RC4:!MD5:!SRP:!PSK:!kRSA";
-	} else if (prio && *prio) {
+	} else if (prio && wget_strcasecmp_ascii(prio, "AUTO")) {
 		openssl_ciphers = prio;
 	}
 
-	if (!SSL_set_cipher_list(ctx, openssl_ciphers)) {
+	if (!SSL_CTX_set_cipher_list(ctx, openssl_ciphers)) {
 		error_printf(_("OpenSSL: Invalid priority string '%s'\n"), prio);
 		retval = WGET_E_INVALID;
 		goto end;
@@ -364,20 +369,20 @@ static int openssl_load_trust_file(SSL_CTX *ctx,
 	return (SSL_CTX_load_verify_locations(ctx, full_path, NULL) ? 0 : -1);
 }
 
-static int openssl_load_trust_files_from_directory(SSL_CTX *ctx, const char *dir)
+static int openssl_load_trust_files_from_directory(SSL_CTX *ctx, const char *dirname)
 {
 	DIR *dir;
 	struct dirent *dp;
 	size_t dirlen, filelen;
 	int loaded = 0;
 
-	if ((dir = opendir(dir))) {
-		dirlen = strlen(dir);
+	if ((dir = opendir(dirname))) {
+		dirlen = strlen(dirname);
 
 		while ((dp = readdir(dir))) {
 			filelen = strlen(dp->d_name);
-			if (filelen >= 4 && !wget_strcasecmp_ascii(dp->d_name, ".pem", 4) &&
-					openssl_load_trust_file(ctx, dir, dirlen, dp->d_name, filelen) == 0)
+			if (filelen >= 4 && !wget_strncasecmp_ascii(dp->d_name, ".pem", 4) &&
+					openssl_load_trust_file(ctx, dirname, dirlen, dp->d_name, filelen) == 0)
 				loaded++;
 		}
 
@@ -402,9 +407,10 @@ static int openssl_load_trust_files(SSL_CTX *ctx, const char *dir)
 		}
 
 		dir = "/etc/ssl/certs";
+		info_printf(_("OpenSSL: Could not load certificates from default paths. Falling back to '%s'."), dir);
 	}
 
-	retval = openssl_load_trust_files_from_directory(dir);
+	retval = openssl_load_trust_files_from_directory(ctx, dir);
 	if (retval == 0)
 		error_printf(_("OpenSSL: No certificates could be loaded from directory '%s'\n"), dir);
 	else if (retval > 0)
@@ -422,7 +428,7 @@ static int openssl_init(SSL_CTX *ctx)
 	X509_STORE *store;
 
 	if (_config.ca_directory && *_config.ca_directory && _config.check_certificate) {
-		retval = openssl_load_trust_files(_config.ca_directory);
+		retval = openssl_load_trust_files(ctx, _config.ca_directory);
 		if (retval < 0)
 			goto end;
 
@@ -442,7 +448,7 @@ static int openssl_init(SSL_CTX *ctx)
 			}
 		}
 
-		retval = openssl_set_priorities(_config.secure_protocol);
+		retval = openssl_set_priorities(ctx, _config.secure_protocol);
 	}
 
 end:
@@ -533,7 +539,7 @@ void wget_ssl_deinit(void)
 int wget_ssl_open(wget_tcp_t *tcp)
 {
 	SSL *ssl;
-	int retval;
+	int retval, error;
 
 	if (!tcp || tcp->sockfd < 0)
 		return WGET_E_INVALID;
@@ -542,13 +548,17 @@ int wget_ssl_open(wget_tcp_t *tcp)
 
 	/* Initiate a new TLS connection from an existing OpenSSL context */
 	ssl = SSL_new(_ctx);
-	if (!ssl)
+	if (!ssl || !SSL_set_fd(ssl, tcp->sockfd))
 		return WGET_E_UNKNOWN;
 
 	do {
 		/* Wait for socket to become ready */
 		if (tcp->connect_timeout) {
-			if ((retval = wget_ready_2_transfer(tcp->sockfd, WGET_IO_READABLE | WGET_IO_WRITABLE)) < 0) {
+			retval = wget_ready_2_transfer(tcp->sockfd,
+					tcp->connect_timeout,
+					WGET_IO_READABLE | WGET_IO_WRITABLE);
+
+			if (retval < 0) {
 				goto bail;
 			} else if (retval == 0) {
 				retval = WGET_E_TIMEOUT;
@@ -558,10 +568,10 @@ int wget_ssl_open(wget_tcp_t *tcp)
 
 		/* Run TLS handshake */
 		retval = SSL_connect(ssl);
-		if (retval <= 0)
-			error = SSL_get_error(retval);
-		else
+		if (retval > 0)
 			break;
+
+		error = SSL_get_error(ssl, retval);
 	} while (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE);
 
 	if (retval <= 0) {
@@ -569,7 +579,6 @@ int wget_ssl_open(wget_tcp_t *tcp)
 		return WGET_E_UNKNOWN;
 	} else {
 		tcp->ssl_session = ssl;
-		tcp->ssl = true;
 		return WGET_E_SUCCESS;
 	}
 
@@ -630,10 +639,12 @@ ssize_t wget_ssl_read_timeout(void *session, char *buf, size_t count,
 	SSL *ssl;
 	int retval, error, fd;
 
-	if (!session || !buf)
-		return WGET_E_INVALID;
 	if (count == 0)
 		return 0;
+	if ((ssl = session) == NULL)
+		return WGET_E_INVALID;
+	if ((fd = SSL_get_fd(ssl)) < 0)
+		return WGET_E_UNKNOWN;
 
 	/* SSL_read() takes an int, so we'd rather play safe here */
 	if (count > INT_MAX)
@@ -692,10 +703,12 @@ ssize_t wget_ssl_write_timeout(void *session, const char *buf, size_t count,
 	int ops = WGET_IO_WRITABLE;
 	int retval, error, fd;
 
-	if (!session || !buf)
-		return WGET_E_INVALID;
 	if (count == 0)
 		return 0;
+	if ((ssl = session) == NULL)
+		return WGET_E_INVALID;
+	if ((fd = SSL_get_fd(ssl)) < 0)
+		return WGET_E_UNKNOWN;
 
 	/* Play safe */
 	if (count > INT_MAX)
@@ -733,7 +746,7 @@ ssize_t wget_ssl_write_timeout(void *session, const char *buf, size_t count,
 				return WGET_E_UNKNOWN;
 			}
 		}
-	} while (attempt < 2);
+	} while (retval < 0 && attempt < 2);
 
 	if (retval < 0)
 		return WGET_E_UNKNOWN;
@@ -766,31 +779,4 @@ const void *wget_tcp_get_stats_ocsp(wget_ocsp_stats_t type, const void *stats)
 	return NULL;
 }
 
-#else /* WITH_OPENSSL */
-
-#include <stddef.h>
-
-#include <wget.h>
-#include "private.h"
-
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-
-void wget_ssl_set_config_string(int key, const char *value) { }
-void wget_ssl_set_config_object(int key, void *value) { }
-void wget_ssl_set_config_int(int key, int value) { }
-
-void wget_ssl_init(void) { }
-void wget_ssl_deinit(void) { }
-
-int wget_ssl_open(wget_tcp_t *tcp) { return WGET_E_TLS_DISABLED; }
-void wget_ssl_close(void **session) { }
-
-ssize_t wget_ssl_read_timeout(void *session, char *buf, size_t count, int timeout) { return 0; }
-ssize_t wget_ssl_write_timeout(void *session, const char *buf, size_t count, int timeout) { return 0; }
-
-void wget_tcp_set_stats_tls(const wget_stats_callback_t fn) { }
-const void *wget_tcp_get_stats_tls(const wget_tls_stats_t type, const void *stats) { return NULL;}
-void wget_tcp_set_stats_ocsp(const wget_stats_callback_t fn) { }
-const void *wget_tcp_get_stats_ocsp(const wget_ocsp_stats_t type, const void *stats) { return NULL;}
-
-#endif
+#endif /* WITH_OPENSSL */
