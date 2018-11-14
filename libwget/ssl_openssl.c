@@ -610,6 +610,10 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	else
 		error_printf(_("Could not resume cached TLS session"));
 
+	/* Send Server Name Indication (SNI) */
+	if (!SSL_set_tlsext_host_name(ssl, tcp->ssl_hostname))
+		error_printf(_("SNI could not be sent"));
+
 	do {
 		/* Wait for socket to become ready */
 		if (tcp->connect_timeout) {
