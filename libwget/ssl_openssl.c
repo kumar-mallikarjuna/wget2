@@ -522,6 +522,57 @@ void wget_ssl_deinit(void)
 	wget_thread_mutex_unlock(_mutex);
 }
 
+static int ssl_resume_session(SSL *ssl, const char *hostname)
+{
+	void *sess = NULL;
+	unsigned long sesslen;
+	SSL_SESSION *ssl_session;
+
+	if (wget_tls_session_get(_config.tls_session_cache,
+			hostname,
+			&sess, &sesslen) &&
+			sess) {
+		ssl_session = d2i_SSL_SESSION(NULL,
+				(const unsigned char **) &sess,
+				sesslen);
+		if (!ssl_session)
+			return -1;
+#if OPENSSL_VERSION_NUMBER >= 0x10101000
+		if (!SSL_SESSION_is_resumable(ssl_session))
+			return -1;
+#endif
+		if (!SSL_set_session(ssl, ssl_session))
+			return -1;
+		SSL_SESSION_free(ssl_session);
+
+		return 1;
+	}
+
+	return 0;
+}
+
+static int ssl_save_session(const SSL *ssl, const char *hostname)
+{
+	void *sess = NULL;
+	unsigned long sesslen;
+	SSL_SESSION *ssl_session = SSL_get0_session(ssl);
+
+	if (!ssl_session)
+		return 0;
+
+	sesslen = i2d_SSL_SESSION(ssl_session, (unsigned char **) &sess);
+	if (sesslen) {
+		wget_tls_session_db_add(_config.tls_session_cache,
+				wget_tls_session_new(hostname,
+						18 * 3600, /* session valid for 18 hours */
+						sess, sesslen));
+		SSL_free(sess);
+		return 1;
+	}
+
+	return 0;
+}
+
 /**
  * \param[in] tcp A TCP connection (see wget_tcp_init())
  * \return `WGET_E_SUCCESS` on success or an error code (`WGET_E_*`) on failure
@@ -539,7 +590,7 @@ void wget_ssl_deinit(void)
 int wget_ssl_open(wget_tcp_t *tcp)
 {
 	SSL *ssl;
-	int retval, error;
+	int retval, error, resumed;
 
 	if (!tcp || tcp->sockfd < 0)
 		return WGET_E_INVALID;
@@ -550,6 +601,14 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	ssl = SSL_new(_ctx);
 	if (!ssl || !SSL_set_fd(ssl, tcp->sockfd))
 		return WGET_E_UNKNOWN;
+
+	/* Resume from a previous SSL/TLS session, if available */
+	if ((resumed = ssl_resume_session(ssl, tcp->ssl_hostname)) == 1)
+		debug_printf(_("Resuming cached TLS session"));
+	else if (resumed == 0)
+		debug_printf(_("No cached TLS session available. Will run a full handshake."));
+	else
+		error_printf(_("Could not resume cached TLS session"));
 
 	do {
 		/* Wait for socket to become ready */
@@ -577,10 +636,19 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	if (retval <= 0) {
 		SSL_free(ssl);
 		return WGET_E_UNKNOWN;
-	} else {
-		tcp->ssl_session = ssl;
-		return WGET_E_SUCCESS;
 	}
+
+	/* Success! */
+	debug_printf("Handshake completed%s\n", resumed ? " (resumed session)" : "");
+
+	/* Save the current TLS session */
+	if (ssl_save_session(ssl, tcp->ssl_hostname))
+		debug_printf(_("TLS session saved in cache"));
+	else
+		debug_printf(_("Could not save TLS session in cache"));
+
+	tcp->ssl_session = ssl;
+	return WGET_E_SUCCESS;
 
 bail:
 	SSL_free(ssl);
@@ -737,9 +805,7 @@ ssize_t wget_ssl_write_timeout(void *session, const char *buf, size_t count,
 			if (error == SSL_ERROR_WANT_READ) {
 				/* Needs reading - This is probably because OpenSSL tried to renegotiate */
 				ops |= WGET_IO_READABLE;
-				if (++attempt >= 2)
-					break;
-				continue;
+				attempt++;
 			} else if (error == SSL_ERROR_WANT_WRITE) {
 				return 0;
 			} else {
