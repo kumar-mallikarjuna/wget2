@@ -304,9 +304,12 @@ static int openssl_load_crl(X509_STORE *store, const char *crl_file)
 	return 0;
 }
 
+#define SET_MIN_VERSION(ctx, ver) \
+	if (!SSL_CTX_set_min_proto_version(ctx, ver)) \
+		return WGET_E_UNKNOWN
+
 static int openssl_set_priorities(SSL_CTX *ctx, const char *prio)
 {
-	int retval = WGET_E_UNKNOWN;
 	/*
 	 * Default ciphers. This is what will be used
 	 * if 'auto' is specified as the priority (currently the default).
@@ -316,47 +319,37 @@ static int openssl_set_priorities(SSL_CTX *ctx, const char *prio)
 	SSL_CTX_set_min_proto_version(ctx, TLS1_2_VERSION);
 	SSL_CTX_set_max_proto_version(ctx, TLS_MAX_VERSION);
 
-	if (!wget_strcasecmp_ascii(prio, "SSL") &&
-			!SSL_CTX_set_min_proto_version(ctx, SSL3_VERSION))
-		goto end;
-	else if (!wget_strcasecmp_ascii(prio, "TLSv1") &&
-			!SSL_CTX_set_min_proto_version(ctx, TLS1_VERSION))
-		goto end;
-	else if (!wget_strcasecmp_ascii(prio, "TLSv1_1") &&
-			!SSL_CTX_set_min_proto_version(ctx, TLS1_1_VERSION))
-		goto end;
+	if (!wget_strcasecmp_ascii(prio, "SSL")) {
+		SET_MIN_VERSION(ctx, SSL3_VERSION);
+	} else if (!wget_strcasecmp_ascii(prio, "TLSv1")) {
+		SET_MIN_VERSION(ctx, TLS1_VERSION);
+	} else if (!wget_strcasecmp_ascii(prio, "TLSv1_1")) {
+		SET_MIN_VERSION(ctx, TLS1_1_VERSION);
 	/*
 	 * Skipping "TLSv1_2".
 	 * Checking for "TLSv1_2" is totally redundant - we already set it as the minimum supported version by default
 	 */
-	else if (!wget_strcasecmp_ascii(prio, "TLSv1_2"))
-		goto end;
-	else if (!wget_strcasecmp_ascii(prio, "TLSv1_3")) {
+	} else if (!wget_strcasecmp_ascii(prio, "TLSv1_3")) {
 		/* OpenSSL supports TLS 1.3 starting at 1.1.1-beta9 (0x10101009) */
 #if OPENSSL_VERSION_NUMBER >= 0x10101009
-		if (!SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION))
-			goto end;
+		SET_MIN_VERSION(ctx, TLS1_3_VERSION);
 #else
 		info_printf(_("OpenSSL: TLS 1.3 is not supported by your OpenSSL version. Will use TLS 1.2 instead.\n"));
-		goto end;
 #endif
 	} else if (!wget_strcasecmp_ascii(prio, "PFS")) {
 		/* Forward-secrecy - Disable RSA key exchange! */
 		openssl_ciphers = "HIGH:!aNULL:!RC4:!MD5:!SRP:!PSK:!kRSA";
-	} else if (prio && wget_strcasecmp_ascii(prio, "AUTO")) {
+	} else if (prio && wget_strcasecmp_ascii(prio, "AUTO") &&
+			wget_strcasecmp_ascii(prio, "TLSv1_2")) {
 		openssl_ciphers = prio;
 	}
 
 	if (!SSL_CTX_set_cipher_list(ctx, openssl_ciphers)) {
 		error_printf(_("OpenSSL: Invalid priority string '%s'\n"), prio);
-		retval = WGET_E_INVALID;
-		goto end;
+		return WGET_E_INVALID;
 	}
 
-	retval = 0;
-
-end:
-	return retval;
+	return 0;
 }
 
 static int openssl_load_trust_file(SSL_CTX *ctx,
