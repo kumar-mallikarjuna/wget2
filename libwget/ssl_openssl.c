@@ -528,6 +528,9 @@ static int ssl_resume_session(SSL *ssl, const char *hostname)
 	unsigned long sesslen;
 	SSL_SESSION *ssl_session;
 
+	if (!_config.tls_session_cache)
+		return 0;
+
 	if (wget_tls_session_get(_config.tls_session_cache,
 			hostname,
 			&sess, &sesslen) &&
@@ -557,7 +560,7 @@ static int ssl_save_session(const SSL *ssl, const char *hostname)
 	unsigned long sesslen;
 	SSL_SESSION *ssl_session = SSL_get0_session(ssl);
 
-	if (!ssl_session)
+	if (!ssl_session || !_config.tls_session_cache)
 		return 0;
 
 	sesslen = i2d_SSL_SESSION(ssl_session, (unsigned char **) &sess);
@@ -571,6 +574,18 @@ static int ssl_save_session(const SSL *ssl, const char *hostname)
 	}
 
 	return 0;
+}
+
+static int wait_2_read_and_write(int sockfd, int timeout)
+{
+	int retval = wget_ready_2_transfer(sockfd,
+			timeout,
+			WGET_IO_READABLE | WGET_IO_WRITABLE);
+
+	if (retval == 0)
+		retval = WGET_E_TIMEOUT;
+
+	return retval;
 }
 
 /**
@@ -611,23 +626,14 @@ int wget_ssl_open(wget_tcp_t *tcp)
 		error_printf(_("Could not resume cached TLS session"));
 
 	/* Send Server Name Indication (SNI) */
-	if (!SSL_set_tlsext_host_name(ssl, tcp->ssl_hostname))
+	if (tcp->ssl_hostname && !SSL_set_tlsext_host_name(ssl, tcp->ssl_hostname))
 		error_printf(_("SNI could not be sent"));
 
 	do {
 		/* Wait for socket to become ready */
-		if (tcp->connect_timeout) {
-			retval = wget_ready_2_transfer(tcp->sockfd,
-					tcp->connect_timeout,
-					WGET_IO_READABLE | WGET_IO_WRITABLE);
-
-			if (retval < 0) {
-				goto bail;
-			} else if (retval == 0) {
-				retval = WGET_E_TIMEOUT;
-				goto bail;
-			}
-		}
+		if (tcp->connect_timeout &&
+			(retval = wait_2_read_and_write(tcp->sockfd, tcp->connect_timeout)) < 0)
+			goto bail;
 
 		/* Run TLS handshake */
 		retval = SSL_connect(ssl);
@@ -639,7 +645,8 @@ int wget_ssl_open(wget_tcp_t *tcp)
 
 	if (retval <= 0) {
 		SSL_free(ssl);
-		return WGET_E_UNKNOWN;
+		retval = WGET_E_UNKNOWN;
+		goto bail;
 	}
 
 	/* Success! */
@@ -649,7 +656,7 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	if (ssl_save_session(ssl, tcp->ssl_hostname))
 		debug_printf(_("TLS session saved in cache"));
 	else
-		debug_printf(_("Could not save TLS session in cache"));
+		debug_printf(_("TLS session discarded"));
 
 	tcp->ssl_session = ssl;
 	return WGET_E_SUCCESS;
@@ -684,6 +691,64 @@ void wget_ssl_close(void **session)
 	}
 }
 
+static int ssl_transfer(int want,
+		void *session, int timeout,
+		void *buf, int count)
+{
+	SSL *ssl;
+	int fd, retval, error, attempt = 0, ops = want;
+
+	if (count == 0)
+		return 0;
+	if ((ssl = session) == NULL)
+		return WGET_E_INVALID;
+	if ((fd = SSL_get_fd(ssl)) < 0)
+		return WGET_E_UNKNOWN;
+
+	/* SSL_read() and SSL_write() take ints, so we'd rather play safe here */
+	if (count > INT_MAX)
+		count = INT_MAX;
+
+	if (timeout < -1)
+		timeout = -1;
+
+	do {
+		if (timeout) {
+			/* Wait until file descriptor becomes ready */
+			retval = wget_ready_2_transfer(fd, timeout, ops);
+			if (retval < 0)
+				return retval;
+			else if (retval == 0)
+				return WGET_E_TIMEOUT;
+		}
+
+		/* We assume socket is non-blocking so neither of these should block */
+		if (want == WGET_IO_READABLE)
+			retval = SSL_read(ssl, buf, count);
+		else
+			retval = SSL_write(ssl, buf, count);
+
+		if (retval < 0) {
+			error = SSL_get_error(ssl, retval);
+
+			if ((error == SSL_ERROR_WANT_READ && want == WGET_IO_READABLE) ||
+					(error == SSL_ERROR_WANT_WRITE && want == WGET_IO_WRITABLE)) {
+				ops = WGET_IO_WRITABLE | WGET_IO_READABLE;
+				attempt++;
+			} else if (error != SSL_ERROR_WANT_WRITE && error != SSL_ERROR_WANT_READ) {
+				return WGET_E_UNKNOWN;
+			} else {
+				return 0;
+			}
+		}
+	} while (retval < 0 && attempt < 2);
+
+	if (retval < 0)
+		return WGET_E_UNKNOWN;
+
+	return retval;
+}
+
 /**
  * \param[in] session An opaque pointer to the SSL/TLS session (obtained with wget_ssl_open() or wget_ssl_server_open())
  * \param[in] buf Destination buffer where the read data will be placed
@@ -705,46 +770,11 @@ void wget_ssl_close(void **session)
  * If a rehandshake is needed, this function does it automatically and tries
  * to read again.
  */
-ssize_t wget_ssl_read_timeout(void *session, char *buf, size_t count,
+ssize_t wget_ssl_read_timeout(void *session,
+		char *buf, size_t count,
 		int timeout)
 {
-	SSL *ssl;
-	int retval, error, fd;
-
-	if (count == 0)
-		return 0;
-	if ((ssl = session) == NULL)
-		return WGET_E_INVALID;
-	if ((fd = SSL_get_fd(ssl)) < 0)
-		return WGET_E_UNKNOWN;
-
-	/* SSL_read() takes an int, so we'd rather play safe here */
-	if (count > INT_MAX)
-		count = INT_MAX;
-
-	if (timeout < -1)
-		timeout = -1;
-
-	if (timeout) {
-		/* Wait until file descriptor becomes ready */
-		retval = wget_ready_2_read(fd, timeout);
-		if (retval < 0)
-			return retval;
-		else if (retval == 0)
-			return WGET_E_TIMEOUT;
-	}
-
-	/* We assume socket is non-blocking, so this should always return immediately */
-	retval = SSL_read(ssl, buf, count);
-
-	if (retval < 0) {
-		error = SSL_get_error(ssl, retval);
-		return (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) ?
-				0 :
-				WGET_E_UNKNOWN;
-	}
-
-	return retval;
+	return ssl_transfer(WGET_IO_READABLE, session, timeout, buf, count);
 }
 
 /**
@@ -767,61 +797,11 @@ ssize_t wget_ssl_read_timeout(void *session, char *buf, size_t count,
  * If a rehandshake is needed, this function does it automatically and tries
  * to write again.
  */
-ssize_t wget_ssl_write_timeout(void *session, const char *buf, size_t count,
+ssize_t wget_ssl_write_timeout(void *session,
+		const char *buf, size_t count,
 		int timeout)
 {
-	SSL *ssl;
-	int attempt = 0;
-	int ops = WGET_IO_WRITABLE;
-	int retval, error, fd;
-
-	if (count == 0)
-		return 0;
-	if ((ssl = session) == NULL)
-		return WGET_E_INVALID;
-	if ((fd = SSL_get_fd(ssl)) < 0)
-		return WGET_E_UNKNOWN;
-
-	/* Play safe */
-	if (count > INT_MAX)
-		count = INT_MAX;
-
-	if (timeout < -1)
-		timeout = -1;
-
-
-	do {
-		if (timeout) {
-			/* Wait until file descriptor becomes ready for writing */
-			retval = wget_ready_2_transfer(fd, timeout, ops);
-			if (retval < 0)
-				return retval;
-			else if (retval == 0)
-				return WGET_E_TIMEOUT;
-		}
-
-		/* We assume socket is non-blocking so this should not block */
-		retval = SSL_write(ssl, buf, count);
-
-		if (retval < 0) {
-			error = SSL_get_error(ssl, retval);
-
-			if (error == SSL_ERROR_WANT_READ) {
-				/* Needs reading - This is probably because OpenSSL tried to renegotiate */
-				ops |= WGET_IO_READABLE;
-				attempt++;
-			} else if (error == SSL_ERROR_WANT_WRITE) {
-				return 0;
-			} else {
-				return WGET_E_UNKNOWN;
-			}
-		}
-	} while (retval < 0 && attempt < 2);
-
-	if (retval < 0)
-		return WGET_E_UNKNOWN;
-
-	return retval;
+	return ssl_transfer(WGET_IO_WRITABLE, session, timeout, (void *) buf, count);
 }
 
 /*
