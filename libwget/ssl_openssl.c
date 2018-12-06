@@ -25,6 +25,7 @@
 
 #include <dirent.h>
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
 
@@ -449,14 +450,14 @@ static int openssl_init(SSL_CTX *ctx)
 		}
 
 		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
-
-		retval = openssl_set_priorities(ctx, _config.secure_protocol);
 	}
 
 	/* Load individual CA file, if requested */
 	if (_config.ca_file && *_config.ca_file &&
 			!SSL_CTX_load_verify_locations(ctx, _config.ca_file, NULL))
 		error_printf(_("Could not load CA certificate from file '%s'\n"), _config.ca_file);
+
+	retval = openssl_set_priorities(ctx, _config.secure_protocol);
 
 end:
 	return retval;
@@ -660,6 +661,12 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	} while (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE);
 
 	if (retval <= 0) {
+		/* Error! Tell the user what happened, and exit. */
+		if (error == SSL_ERROR_SSL) {
+			error_printf(_("Could not complete TLS handshake: %s\n"),
+					ERR_reason_error_string(ERR_peek_last_error()));
+		}
+
 		retval = WGET_E_UNKNOWN;
 		goto bail;
 	}
