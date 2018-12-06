@@ -667,7 +667,10 @@ int wget_ssl_open(wget_tcp_t *tcp)
 					ERR_reason_error_string(ERR_peek_last_error()));
 		}
 
-		retval = WGET_E_UNKNOWN;
+		/* Return proper error code - Most of the time this will be a cert validation error */
+		retval = (ERR_GET_REASON(ERR_peek_last_error()) == SSL_R_CERTIFICATE_VERIFY_FAILED ?
+				WGET_E_CERTIFICATE :
+				WGET_E_HANDSHAKE);
 		goto bail;
 	}
 
