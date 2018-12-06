@@ -358,9 +358,10 @@ static int openssl_load_trust_file(SSL_CTX *ctx,
 		const char *dir, size_t dirlen,
 		const char *file, size_t filelen)
 {
-	size_t len = dirlen + filelen + 1;
+	size_t len = dirlen + filelen + 3;
 	char full_path[len];
-	snprintf(full_path, len, "%s/%s", dir, file);
+	snprintf(full_path, dirlen + 2, "%s/", dir);
+	strncat(full_path, file, filelen);
 	return (SSL_CTX_load_verify_locations(ctx, full_path, NULL) ? 0 : -1);
 }
 
@@ -376,7 +377,7 @@ static int openssl_load_trust_files_from_directory(SSL_CTX *ctx, const char *dir
 
 		while ((dp = readdir(dir))) {
 			filelen = strlen(dp->d_name);
-			if (filelen >= 4 && !wget_strncasecmp_ascii(dp->d_name, ".pem", 4) &&
+			if (filelen >= 4 && !wget_strncasecmp_ascii(dp->d_name + filelen - 4, ".pem", 4) &&
 					openssl_load_trust_file(ctx, dirname, dirlen, dp->d_name, filelen) == 0)
 				loaded++;
 		}
