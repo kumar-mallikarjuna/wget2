@@ -26,6 +26,7 @@
 #include <dirent.h>
 #include <openssl/ssl.h>
 #include <openssl/x509_vfy.h>
+#include <openssl/x509v3.h>
 
 #include <wget.h>
 #include "net.h"
@@ -420,7 +421,13 @@ static int openssl_init(SSL_CTX *ctx)
 	int retval = 0;
 	X509_STORE *store;
 
-	if (_config.ca_directory && *_config.ca_directory && _config.check_certificate) {
+	if (!_config.check_certificate) {
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
+		info_printf(_("Certificate check disabled. Peer's certificate will NOT be checked.\n"));
+		goto end;
+	}
+
+	if (_config.ca_directory && *_config.ca_directory) {
 		retval = openssl_load_trust_files(ctx, _config.ca_directory);
 		if (retval < 0)
 			goto end;
@@ -441,8 +448,15 @@ static int openssl_init(SSL_CTX *ctx)
 			}
 		}
 
+		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+
 		retval = openssl_set_priorities(ctx, _config.secure_protocol);
 	}
+
+	/* Load individual CA file, if requested */
+	if (_config.ca_file && *_config.ca_file &&
+			!SSL_CTX_load_verify_locations(ctx, _config.ca_file, NULL))
+		error_printf(_("Could not load CA certificate from file '%s'\n"), _config.ca_file);
 
 end:
 	return retval;
@@ -597,7 +611,7 @@ static int wait_2_read_and_write(int sockfd, int timeout)
  */
 int wget_ssl_open(wget_tcp_t *tcp)
 {
-	SSL *ssl;
+	SSL *ssl = NULL;
 	int retval, error, resumed;
 
 	if (!tcp || tcp->sockfd < 0)
@@ -606,9 +620,22 @@ int wget_ssl_open(wget_tcp_t *tcp)
 		wget_ssl_init();
 
 	/* Initiate a new TLS connection from an existing OpenSSL context */
-	ssl = SSL_new(_ctx);
-	if (!ssl || !SSL_set_fd(ssl, tcp->sockfd))
-		return WGET_E_UNKNOWN;
+	if (!(ssl = SSL_new(_ctx)) || !SSL_set_fd(ssl, tcp->sockfd)) {
+		retval = WGET_E_UNKNOWN;
+		goto bail;
+	}
+
+	/* Enable host name verification, if requested */
+	if (_config.check_hostname) {
+		SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
+		SSL_set1_host(ssl, tcp->ssl_hostname);
+	} else {
+		info_printf(_("Host name check disabled. Server certificate's subject name will not be checked.\n"));
+	}
+
+	/* Send Server Name Indication (SNI) */
+	if (tcp->ssl_hostname && !SSL_set_tlsext_host_name(ssl, tcp->ssl_hostname))
+		error_printf(_("SNI could not be sent"));
 
 	/* Resume from a previous SSL/TLS session, if available */
 	if ((resumed = ssl_resume_session(ssl, tcp->ssl_hostname)) == 1)
@@ -617,10 +644,6 @@ int wget_ssl_open(wget_tcp_t *tcp)
 		debug_printf(_("No cached TLS session available. Will run a full handshake."));
 	else
 		error_printf(_("Could not resume cached TLS session"));
-
-	/* Send Server Name Indication (SNI) */
-	if (tcp->ssl_hostname && !SSL_set_tlsext_host_name(ssl, tcp->ssl_hostname))
-		error_printf(_("SNI could not be sent"));
 
 	do {
 		/* Wait for socket to become ready */
@@ -637,7 +660,6 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	} while (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE);
 
 	if (retval <= 0) {
-		SSL_free(ssl);
 		retval = WGET_E_UNKNOWN;
 		goto bail;
 	}
@@ -655,7 +677,8 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	return WGET_E_SUCCESS;
 
 bail:
-	SSL_free(ssl);
+	if (ssl)
+		SSL_free(ssl);
 	return retval;
 }
 
