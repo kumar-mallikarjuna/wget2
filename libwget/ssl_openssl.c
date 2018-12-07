@@ -26,6 +26,9 @@
 #include <dirent.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ocsp.h>
+#include <openssl/crypto.h>
+#include <openssl/ossl_typ.h>
 #include <openssl/x509_vfy.h>
 #include <openssl/x509v3.h>
 
@@ -79,6 +82,8 @@ static struct _config
 	};
 
 static int _init;
+static __thread int _ex_data_idx;
+static __thread CRYPTO_EX_DATA _crypto_ex_data;
 static wget_thread_mutex_t _mutex;
 
 static SSL_CTX *_ctx;
@@ -90,12 +95,16 @@ static void __attribute__ ((constructor)) _wget_tls_init(void)
 {
 	if (!_mutex)
 		wget_thread_mutex_init(&_mutex);
+	if (!_ex_data_idx)
+		_ex_data_idx = -1;
 }
 
 static void __attribute__ ((destructor)) _wget_tls_exit(void)
 {
 	if (_mutex)
 		wget_thread_mutex_destroy(&_mutex);
+	if (_ex_data_idx)
+		_ex_data_idx = -1;
 }
 
 /*
@@ -147,7 +156,7 @@ static void __attribute__ ((destructor)) _wget_tls_exit(void)
  *  OCSP is a protocol by which a server is queried to tell whether a given certificate is valid or not. It's an approach contrary
  *  to that used by CRLs. While CRLs are black lists, OCSP takes a white list approach where a certificate can be checked for validity.
  *  Whenever a client or server presents a certificate in a TLS handshake, the provided URL will be queried (using OCSP) to check whether
- *  that certifiacte is valid or not. If the server responds the certificate is not valid, the handshake will be immediately aborted.
+ *  that certificate is valid or not. If the server responds the certificate is not valid, the handshake will be immediately aborted.
  *  - WGET_SSL_ALPN: Sets the ALPN string to be sent to the remote host. ALPN is a TLS extension
  *  ([RFC 7301](https://tools.ietf.org/html/rfc7301))
  *  that allows both the server and the client to signal which application-layer protocols they support (HTTP/2, QUIC, etc.).
@@ -418,6 +427,82 @@ end:
 	return retval;
 }
 
+static int verify_hpkp(const char *hostname, X509 *subject_cert)
+{
+	int retval, spki_len;
+	unsigned char *spki = NULL;
+
+	/* Get certificate's public key in DER format */
+	spki_len = i2d_PUBKEY(X509_get0_pubkey(subject_cert), &spki);
+	if (spki_len <= 0)
+		return -1;
+
+	/* Lookup database */
+	retval = wget_hpkp_db_check_pubkey(_config.hpkp_cache,
+			hostname,
+			spki, spki_len);
+
+	/* TODO update stats here */
+
+	switch (retval) {
+	case 1:
+		debug_printf(_("Matching HPKP pinning found for host '%s'\n"), hostname);
+		retval = 0;
+		break;
+	case 0:
+		debug_printf(_("No HPKP pinning found for host '%s'\n"), hostname);
+		retval = 1;
+		break;
+	case -1:
+		debug_printf(_("Could not check HPKP pinning\n"));
+		retval = 0;
+		break;
+	case -2:
+		debug_printf(_("Public key for host '%s' does not match\n"), hostname);
+		retval = -1;
+		break;
+	}
+
+	OPENSSL_free(spki);
+	return retval;
+}
+
+/*
+ * This is our custom revocation check function.
+ * It will be invoked by OpenSSL at some point during the TLS handshake.
+ * It takes the server's certificate chain, and its purpose is to check the revocation
+ * status for each certificate in it. We validate certs against HPKP and OCSP here.
+ * This function should return 1 on success (the whole cert chain is valid) and 0 on failure.
+ */
+static int _openssl_revocation_check_fn(X509_STORE_CTX *storectx)
+{
+	int pin_ok = 0, retval;
+	X509 *cert = NULL;
+	const char *hostname;
+	STACK_OF(X509) *certs = X509_STORE_CTX_get1_chain(storectx);
+	unsigned cert_list_size = sk_X509_num(certs);
+
+	hostname = CRYPTO_get_ex_data(&_crypto_ex_data, _ex_data_idx);
+
+	/* Check the whole cert chain against HPKP database */
+	if (!_config.hpkp_cache)
+		return 1;
+
+	for (unsigned i = 0; i < cert_list_size; i++) {
+		cert = sk_X509_value(certs, i);
+
+		if ((retval = verify_hpkp(hostname, cert)) >= 0)
+			pin_ok = 1;
+		if (retval == 1)
+			break;
+	}
+
+	if (!pin_ok)
+		error_printf(_("Public key pinning mismatch.\n"));
+
+	return pin_ok;
+}
+
 static int openssl_init(SSL_CTX *ctx)
 {
 	int retval = 0;
@@ -429,6 +514,13 @@ static int openssl_init(SSL_CTX *ctx)
 		goto end;
 	}
 
+	store = SSL_CTX_get_cert_store(ctx);
+	if (!store) {
+		error_printf(_("OpenSSL: Could not obtain cert store\n"));
+		retval = WGET_E_UNKNOWN;
+		goto end;
+	}
+
 	if (_config.ca_directory && *_config.ca_directory) {
 		retval = openssl_load_trust_files(ctx, _config.ca_directory);
 		if (retval < 0)
@@ -436,12 +528,6 @@ static int openssl_init(SSL_CTX *ctx)
 
 		if (_config.crl_file) {
 			/* Load CRL file in PEM format. */
-			store = SSL_CTX_get_cert_store(ctx);
-			if (!store) {
-				error_printf(_("OpenSSL: Could not obtain cert store\n"));
-				retval = WGET_E_UNKNOWN;
-				goto end;
-			}
 			if ((retval = openssl_load_crl(store, _config.crl_file)) < 0) {
 				error_printf(_("Could not load CRL from '%s' (%d)\n"),
 						_config.crl_file,
@@ -457,6 +543,9 @@ static int openssl_init(SSL_CTX *ctx)
 	if (_config.ca_file && *_config.ca_file &&
 			!SSL_CTX_load_verify_locations(ctx, _config.ca_file, NULL))
 		error_printf(_("Could not load CA certificate from file '%s'\n"), _config.ca_file);
+
+	/* Set our custom revocation check function, for HPKP and OCSP validation */
+	X509_STORE_set_check_revocation(store, _openssl_revocation_check_fn);
 
 	retval = openssl_set_priorities(ctx, _config.secure_protocol);
 
@@ -627,11 +716,30 @@ int wget_ssl_open(wget_tcp_t *tcp)
 		goto bail;
 	}
 
+	/* Store the hostname for the verification callback */
+	_ex_data_idx = CRYPTO_get_ex_new_index(
+			CRYPTO_EX_INDEX_SSL,
+			0, NULL,	/* argl, argp */
+			NULL,		/* new_func */
+			NULL,		/* dup_func */
+			NULL);		/* free_func */
+	if (_ex_data_idx == -1 ||
+			!CRYPTO_new_ex_data(CRYPTO_EX_INDEX_SSL,
+					NULL,
+					&_crypto_ex_data) ||
+			!CRYPTO_set_ex_data(&_crypto_ex_data,
+					_ex_data_idx,
+					(void *) tcp->ssl_hostname)) {
+		retval = WGET_E_UNKNOWN;
+		goto bail;
+	}
+
 	/* Enable host name verification, if requested */
 	if (_config.check_hostname) {
-		SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
 		SSL_set1_host(ssl, tcp->ssl_hostname);
+		SSL_set_hostflags(ssl, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
 	} else {
+		SSL_set_hostflags(ssl, X509_CHECK_FLAG_NEVER_CHECK_SUBJECT);
 		info_printf(_("Host name check disabled. Server certificate's subject name will not be checked.\n"));
 	}
 
@@ -712,6 +820,9 @@ void wget_ssl_close(void **session)
 		do
 			retval = SSL_shutdown(ssl);
 		while (retval == 0);
+
+		CRYPTO_free_ex_data(_ex_data_idx, NULL, &_crypto_ex_data);
+		CRYPTO_free_ex_index(CRYPTO_EX_INDEX_SSL, _ex_data_idx);
 
 		SSL_free(ssl);
 		*session = NULL;
