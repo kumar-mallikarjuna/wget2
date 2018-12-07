@@ -723,7 +723,7 @@ static int ssl_transfer(int want,
 		void *buf, int count)
 {
 	SSL *ssl;
-	int fd, retval, error, attempt = 0, ops = want;
+	int fd, retval, error, ops = want;
 
 	if (count == 0)
 		return 0;
@@ -758,20 +758,18 @@ static int ssl_transfer(int want,
 		if (retval < 0) {
 			error = SSL_get_error(ssl, retval);
 
-			if ((error == SSL_ERROR_WANT_READ && want == WGET_IO_READABLE) ||
-					(error == SSL_ERROR_WANT_WRITE && want == WGET_IO_WRITABLE)) {
+			if (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE) {
+				/* Socket not ready - let's try again (unless timeout was zero) */
 				ops = WGET_IO_WRITABLE | WGET_IO_READABLE;
-				attempt++;
-			} else if (error != SSL_ERROR_WANT_WRITE && error != SSL_ERROR_WANT_READ) {
-				return WGET_E_UNKNOWN;
+
+				if (timeout == 0)
+					return 0;
 			} else {
-				return 0;
+				/* Not exactly a handshake error, but this is the closest one to signal TLS layer errors */
+				return WGET_E_HANDSHAKE;
 			}
 		}
-	} while (retval < 0 && attempt < 2);
-
-	if (retval < 0)
-		return WGET_E_UNKNOWN;
+	} while (retval < 0);
 
 	return retval;
 }
@@ -801,7 +799,15 @@ ssize_t wget_ssl_read_timeout(void *session,
 		char *buf, size_t count,
 		int timeout)
 {
-	return ssl_transfer(WGET_IO_READABLE, session, timeout, buf, count);
+	int retval = ssl_transfer(WGET_IO_READABLE, session, timeout, buf, count);
+
+	if (retval == WGET_E_HANDSHAKE) {
+		error_printf(_("TLS read error: %s\n"),
+				ERR_reason_error_string(ERR_peek_last_error()));
+		retval = WGET_E_UNKNOWN;
+	}
+
+	return retval;
 }
 
 /**
@@ -828,7 +834,15 @@ ssize_t wget_ssl_write_timeout(void *session,
 		const char *buf, size_t count,
 		int timeout)
 {
-	return ssl_transfer(WGET_IO_WRITABLE, session, timeout, (void *) buf, count);
+	int retval = ssl_transfer(WGET_IO_WRITABLE, session, timeout, (void *) buf, count);
+
+	if (retval == WGET_E_HANDSHAKE) {
+		error_printf(_("TLS write error: %s\n"),
+				ERR_reason_error_string(ERR_peek_last_error()));
+		retval = WGET_E_UNKNOWN;
+	}
+
+	return retval;
 }
 
 /*
