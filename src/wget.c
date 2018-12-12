@@ -695,6 +695,16 @@ static void add_url_to_queue(const char *url, wget_iri_t *base, const char *enco
 		return;
 	}
 
+/*	if (!iri->path || !*iri->path) {
+		if (iri->path_allocated) {
+			xfree(iri->path);
+			iri->path_allocated=0;
+		}
+		iri->path = config.default_page;
+	}
+*/
+	wget_debug_printf(_("Adding URL: %s path=%s\n"), url, iri->path);
+
 	// Allow plugins to intercept URLs
 	plugin_db_forward_url(iri, &plugin_verdict);
 	if (plugin_verdict.reject) {
@@ -848,6 +858,16 @@ static void add_url(JOB *job, const char *encoding, const char *url, int flags)
 		error_printf(_("Cannot resolve URI '%s'\n"), url);
 		return;
 	}
+
+/*
+	if (!iri->path || !*iri->path) {
+		if (iri->path_allocated) {
+			xfree(iri->path);
+			iri->path_allocated=0;
+		}
+		iri->path = config.default_page;
+	}
+*/
 
 	// Allow plugins to intercept URL
 	plugin_db_forward_url(iri, &plugin_verdict);
@@ -2972,10 +2992,12 @@ static int _open_unique(const char *fname, int flags, mode_t mode, int multiple,
 {
 	int fd;
 
+	info_printf("%s: %s unique_len %zu unique=%s flags=0x%X", __func__, fname, unique_len, unique, mode);
 	if (unique_len && unique[0])
 		return _wa_open(unique, flags, mode);
 
 	fd = _wa_open(fname, flags, mode);
+	info_printf("%s: fd=%d", __func__, fd);
 	if (fd >= 0)
 		return fd;
 
@@ -3022,6 +3044,13 @@ static bool check_mime_list(wget_vector_t *list, const char *mime)
 
 	debug_printf("mime check %d", result);
 	return result;
+}
+
+static const char *_basename(const char *path)
+{
+	const char *fname = strrchr(path, "/");
+
+	return fname ? fname + 1: path;
 }
 
 static int G_GNUC_WGET_NONNULL((1)) _prepare_file(wget_http_response_t *resp, const char *fname, int flag,
@@ -3149,9 +3178,16 @@ static int G_GNUC_WGET_NONNULL((1)) _prepare_file(wget_http_response_t *resp, co
 
 	fname_length += 16;
 
+
+	info_printf("%s: %s oflag=0x%X clobber=%d recur=%d dir=%d", __func__, fname, oflag, config.clobber, config.recursive, config.directories);
+	info_printf("%s: %s base=%s default=%s %d", __func__, fname, _basename(fname), config.default_page, wget_match_tail(_basename(fname), config.default_page));
 	if (config.timestamping) {
 		if (oflag == O_TRUNC)
 			flag = O_TRUNC;
+	} else if (oflag == O_TRUNC && wget_match_tail(_basename(fname), config.default_page)) {
+		info_printf("%s: multiple=1", __func__);
+		multiple = 1;
+		flag = O_EXCL;
 	} else if (!config.clobber || (config.recursive && config.directories)) {
 		if (oflag == O_TRUNC && !(config.recursive && config.directories))
 			flag = O_EXCL;
@@ -3209,7 +3245,8 @@ static int G_GNUC_WGET_NONNULL((1)) _prepare_file(wget_http_response_t *resp, co
 
 	fd = _open_unique(fname, O_WRONLY | flag | O_CREAT | O_NONBLOCK | O_BINARY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH,
 		multiple, unique, sizeof(unique));
-	// debug_printf("1 fd=%d flag=%02x (%02x %02x %02x) errno=%d %s\n",fd,flag,O_EXCL,O_TRUNC,O_APPEND,errno,fname);
+	info_printf("1 fd=%d flag=%02x (%02x %02x %02x) errno=%d %s %s\n",fd,flag,O_EXCL,O_TRUNC,O_APPEND,errno,fname,unique);
+
 	// Store the "actual" file name (with any extensions that were added present)
 	wget_asprintf(actual_file_name, "%s", unique[0] ? unique : fname);
 
@@ -3311,11 +3348,14 @@ static int _get_header(wget_http_response_t *resp, void *context)
 	if (dest
 		&& ((config.save_content_on && check_status_code_list(config.save_content_on, resp->code))
 		|| (!config.save_content_on
-			&& (resp->code == 200 || resp->code == 206 || config.content_on_error)))) {
+			&& (resp->code == 200 || resp->code == 206 || config.content_on_error))))
+	{
+		char *new_fname = NULL;
 
 		// Job re-use?
 		xfree(ctx->job->sig_filename);
 
+		info_printf("Prepare File %s with mode %s\n", dest, resp->code == 206 ? "O_APPEND" : "O_TRUNC");
 		ctx->outfd = _prepare_file(resp, dest,
 			resp->code == 206 ? O_APPEND : O_TRUNC,
 			ctx->job->iri,
@@ -3323,10 +3363,24 @@ static int _get_header(wget_http_response_t *resp, void *context)
 			ctx->job->ignore_patterns,
 			resp->code == 206 ? ctx->body : NULL,
 			ctx->max_memory,
-			&ctx->job->sig_filename,
+			&new_fname,
 			ctx->job->iri->path);
 
-		if (ctx->outfd == -1)
+		info_printf("*** %d New filename now %s\n", ctx->outfd, new_fname);
+		if (ctx->outfd >= 0) {
+			if (new_fname) {
+				/* if we saved the content under a unique filename, also change the original file names */
+				info_printf("New filename now %s\n", name);
+				if (name == ctx->job->local_filename) {
+					xfree(ctx->job->local_filename);
+					ctx->job->local_filename = wget_strdup(new_fname);
+				} else if (name == resp->content_filename) {
+					xfree(resp->content_filename);
+					resp->content_filename = wget_strdup(new_fname);
+				}
+				ctx->job->sig_filename = new_fname;
+			}
+		} else if (ctx->outfd == -1)
 			ret = -1;
 	}
 

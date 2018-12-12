@@ -71,6 +71,7 @@ int main(void)
 		"<style> html { background: url(second.html); }</style>" \
 		"<style> div { background: url(second.html); }</style>" \
 		"</head><body><p>A link to a" \
+		" <a href=\"index.html.1\">xxx</a>." \
 		" <a href=\"second.html\">second page</a>." \
 		" <a href=\"second.html\">second page</a>." \
 		" <a href=\"subdir/third.html\">third page</a>." \
