@@ -631,21 +631,26 @@ static int ssl_resume_session(SSL *ssl, const char *hostname)
 
 	if (wget_tls_session_get(_config.tls_session_cache,
 			hostname,
-			&sess, &sesslen) &&
+			&sess, &sesslen) == 0 &&
 			sess) {
+		debug_printf("Found cached session data for host '%s'\n",hostname);
 		ssl_session = d2i_SSL_SESSION(NULL,
 				(const unsigned char **) &sess,
 				sesslen);
-		if (!ssl_session)
+		if (!ssl_session) {
+			error_printf(_("OpenSSL: Could not parse cached session data.\n"));
 			return -1;
+		}
 #if OPENSSL_VERSION_NUMBER >= 0x10101000
 		if (!SSL_SESSION_is_resumable(ssl_session))
 			return -1;
 #endif
-		if (!SSL_set_session(ssl, ssl_session))
+		if (!SSL_set_session(ssl, ssl_session)) {
+			error_printf(_("OpenSSL: Could not set session data.\n"));
 			return -1;
-		SSL_SESSION_free(ssl_session);
+		}
 
+		SSL_SESSION_free(ssl_session);
 		return 1;
 	}
 
@@ -667,7 +672,7 @@ static int ssl_save_session(const SSL *ssl, const char *hostname)
 				wget_tls_session_new(hostname,
 						18 * 3600, /* session valid for 18 hours */
 						sess, sesslen));
-		SSL_free(sess);
+		OPENSSL_free(sess);
 		return 1;
 	}
 
@@ -749,11 +754,11 @@ int wget_ssl_open(wget_tcp_t *tcp)
 
 	/* Resume from a previous SSL/TLS session, if available */
 	if ((resumed = ssl_resume_session(ssl, tcp->ssl_hostname)) == 1)
-		debug_printf(_("Resuming cached TLS session"));
+		debug_printf(_("Will try to resume cached TLS session"));
 	else if (resumed == 0)
 		debug_printf(_("No cached TLS session available. Will run a full handshake."));
 	else
-		error_printf(_("Could not resume cached TLS session"));
+		error_printf(_("Could not get cached TLS session"));
 
 	do {
 		/* Wait for socket to become ready */
@@ -763,8 +768,10 @@ int wget_ssl_open(wget_tcp_t *tcp)
 
 		/* Run TLS handshake */
 		retval = SSL_connect(ssl);
-		if (retval > 0)
+		if (retval > 0) {
+			resumed = SSL_session_reused(ssl);
 			break;
+		}
 
 		error = SSL_get_error(ssl, retval);
 	} while (error == SSL_ERROR_WANT_READ || error == SSL_ERROR_WANT_WRITE);
@@ -784,7 +791,7 @@ int wget_ssl_open(wget_tcp_t *tcp)
 	}
 
 	/* Success! */
-	debug_printf("Handshake completed%s\n", resumed ? " (resumed session)" : "");
+	debug_printf("Handshake completed%s\n", resumed ? " (resumed session)" : " (full handshake - not resumed)");
 
 	/* Save the current TLS session */
 	if (ssl_save_session(ssl, tcp->ssl_hostname))
