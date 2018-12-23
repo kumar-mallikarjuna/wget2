@@ -427,7 +427,296 @@ end:
 	return retval;
 }
 
-static int verify_hpkp(const char *hostname, X509 *subject_cert)
+static const char *get_printable_ocsp_reason_desc(int reason)
+{
+	switch (reason) {
+	case OCSP_REVOKED_STATUS_NOSTATUS:
+		return "not given";
+	case OCSP_REVOKED_STATUS_UNSPECIFIED:
+		return "unspecified";
+	case OCSP_REVOKED_STATUS_KEYCOMPROMISE:
+		return "key compromise";
+	case OCSP_REVOKED_STATUS_CACOMPROMISE:
+		return "CA compromise";
+	case OCSP_REVOKED_STATUS_AFFILIATIONCHANGED:
+		return "affiliation changed";
+	case OCSP_REVOKED_STATUS_SUPERSEDED:
+		return "superseded";
+	case OCSP_REVOKED_STATUS_CESSATIONOFOPERATION:
+		return "cessation of operation";
+	case OCSP_REVOKED_STATUS_CERTIFICATEHOLD:
+		return "certificate hold";
+	case OCSP_REVOKED_STATUS_REMOVEFROMCRL:
+		return "remove from CRL";
+	}
+
+	return NULL;
+}
+
+static int _wget_debug_cb(BIO *bio, const char *data)
+{
+	debug_printf("%s", data);
+	return 0;
+}
+
+static BIO *create_openssl_bio_for_wget_debug()
+{
+	BIO_METHOD *biomethod = BIO_meth_new(BIO_get_new_index(), "wget debug BIO");
+	BIO_meth_set_puts(biomethod, _wget_debug_cb);
+	return BIO_new(biomethod);
+}
+
+static int print_ocsp_response_status(int status)
+{
+	debug_printf("*** OCSP response status: ");
+
+	switch (status) {
+	case OCSP_RESPONSE_STATUS_SUCCESSFUL:
+		debug_printf("successful\n");
+		break;
+	case OCSP_RESPONSE_STATUS_MALFORMEDREQUEST:
+		debug_printf("malformed request\n");
+		break;
+	case OCSP_RESPONSE_STATUS_INTERNALERROR:
+		debug_printf("internal error\n");
+		break;
+	case OCSP_RESPONSE_STATUS_TRYLATER:
+		debug_printf("try later\n");
+		break;
+	case OCSP_RESPONSE_STATUS_SIGREQUIRED:
+		debug_printf("signature required\n");
+		break;
+	case OCSP_RESPONSE_STATUS_UNAUTHORIZED:
+		debug_printf("unauthorized\n");
+		break;
+	default:
+		debug_printf("unknown status code\n");
+		break;
+	}
+
+	return status;
+}
+
+static int print_ocsp_cert_status(int status, int reason,
+		const ASN1_GENERALIZEDTIME *revtime)
+{
+	BIO *bio;
+	const char *reason_desc;
+
+	debug_printf("*** OCSP cert status: ");
+
+	switch (status) {
+	case V_OCSP_CERTSTATUS_GOOD:
+		debug_printf("good\n");
+		break;
+	case V_OCSP_CERTSTATUS_UNKNOWN:
+		debug_printf("unknown\n");
+		break;
+	default:
+		debug_printf("invalid status code\n");
+		break;
+	case V_OCSP_CERTSTATUS_REVOKED:
+		/* Too convoluted, but seems to be the only way to print a human-readable ASN1_GENERALIZEDTIME */
+		bio = create_openssl_bio_for_wget_debug();
+		reason_desc = get_printable_ocsp_reason_desc(reason);
+
+		if (bio) {
+			BIO_printf(bio, "revoked at ");
+			ASN1_GENERALIZEDTIME_print(bio, revtime);
+			BIO_free(bio);
+		} else {
+			debug_printf("revoked");
+		}
+
+		debug_printf(" (reason: %s)\n", (reason_desc ? reason_desc : "unknown reason"));
+		break;
+	}
+
+	return status;
+}
+
+static OCSP_REQUEST *send_ocsp_request(const char *uri,
+		X509 *subject_cert, OCSP_CERTID *certid,
+		wget_buffer_t **response)
+{
+	OCSP_REQUEST *ocspreq;
+	wget_http_response_t *resp;
+	wget_http_connection_t *conn = NULL;
+
+	ocspreq = OCSP_REQUEST_new();
+	if (!ocspreq)
+		goto end;
+
+	if (!OCSP_request_add0_id(ocspreq, certid) ||
+		!OCSP_request_add1_cert(ocspreq, subject_cert) ||
+		!OCSP_request_add1_nonce(ocspreq, NULL, 0)) {
+		OCSP_REQUEST_free(ocspreq);
+		ocspreq = NULL;
+		goto end;
+	}
+
+	resp = wget_http_get(
+		WGET_HTTP_URL, uri,
+		WGET_HTTP_HEADER_ADD, "Accept-Encoding", "identity",
+		WGET_HTTP_HEADER_ADD, "Accept", "*/*",
+		WGET_HTTP_HEADER_ADD, "Content-Type", "application/ocsp-request",
+		WGET_HTTP_MAX_REDIRECTIONS, 5,
+		WGET_HTTP_CONNECTION_PTR, &conn,
+		0);
+
+	if (resp) {
+		*response = resp->body;
+		resp->body = NULL;
+		wget_http_free_response(&resp);
+	} else {
+		OCSP_REQUEST_free(ocspreq);
+		ocspreq = NULL;
+	}
+
+end:
+	return ocspreq;
+}
+
+static int check_ocsp_response(wget_buffer_t *respdata,
+		STACK_OF(X509) *certstack,
+		X509_STORE *certstore,
+		OCSP_REQUEST *ocspreq,
+		OCSP_CERTID *certid)
+{
+	int
+		retval = -1,
+		status, reason;
+	OCSP_RESPONSE *ocspresp;
+	OCSP_BASICRESP *ocspbs = NULL;
+	ASN1_GENERALIZEDTIME *revtime = NULL,
+			*thisupd = NULL,
+			*nextupd = NULL;
+
+	if (!(ocspresp = d2i_OCSP_RESPONSE(NULL, (const unsigned char **) &respdata->data, respdata->length)))
+		return -1;
+
+	if (print_ocsp_response_status(OCSP_response_status(ocspresp))
+			!= OCSP_RESPONSE_STATUS_SUCCESSFUL)
+		goto end;
+
+	if (!(ocspbs = OCSP_response_get1_basic(ocspresp)))
+		goto end;
+
+	if (!OCSP_check_nonce(ocspreq, ocspbs)) {
+		debug_printf("OCSP verification error: nonces do not match\n");
+		goto end;
+	}
+
+	if (!OCSP_resp_find_status(ocspbs, certid,
+			&status, &reason,
+			&revtime, &thisupd, &nextupd))
+		goto end;
+
+	if (print_ocsp_cert_status(status, reason, revtime) != V_OCSP_CERTSTATUS_GOOD)
+		goto end;
+
+	if (!OCSP_check_validity(thisupd, nextupd, 0, 0)) {
+		debug_printf("OCSP verification error: response is out of date\n");
+		goto end;
+	}
+
+	if (OCSP_basic_verify(ocspbs, certstack, certstore, 0) <= 0) {
+		debug_printf("OCSP verification error: response signature could not be verified\n");
+		goto end;
+	}
+
+	/* Success! */
+	retval = 0;
+
+end:
+	if (ocspbs)
+		OCSP_BASICRESP_free(ocspbs);
+	OCSP_RESPONSE_free(ocspresp);
+	return retval;
+}
+
+static unsigned char *get_ocsp_uri(X509 *cert)
+{
+	int idx;
+	unsigned char *ocsp_uri = NULL;
+	X509_EXTENSION *ext;
+	ASN1_OCTET_STRING *extdata;
+	const STACK_OF(X509_EXTENSION) *exts = X509_get0_extensions(cert);
+
+	if (exts) {
+		/* Get the authorityInfoAccess extension */
+		if ((idx = X509v3_get_ext_by_NID(exts, NID_info_access, -1)) >= 0) {
+			ext = sk_X509_EXTENSION_value(exts, idx);
+			extdata = X509_EXTENSION_get_data(ext);
+			if (extdata)
+				ASN1_STRING_to_UTF8(&ocsp_uri, extdata);
+		}
+	}
+
+	return ocsp_uri;
+}
+
+static int verify_one_ocsp(const char *ocsp_uri,
+		STACK_OF(X509) *certs,
+		X509 *cert, X509 *issuer_cert,
+		X509_STORE *certstore)
+{
+	wget_buffer_t *resp;
+	OCSP_CERTID *certid;
+	OCSP_REQUEST *ocspreq;
+
+	/* Generate CertID and OCSP request */
+	certid = OCSP_cert_to_id(EVP_sha256(), cert, issuer_cert);
+	if (!(ocspreq = send_ocsp_request(ocsp_uri,
+			cert, certid,
+			&resp))) {
+		OCSP_CERTID_free(certid);
+		return -1;
+	}
+
+	/* Check response */
+	if (check_ocsp_response(resp, certs, certstore, ocspreq, certid) < 0) {
+		OCSP_CERTID_free(certid);
+		OCSP_REQUEST_free(ocspreq);
+		return -1;
+	}
+
+	OCSP_CERTID_free(certid);
+	OCSP_REQUEST_free(ocspreq);
+	return 0;
+}
+
+static int verify_ocsp(X509_STORE_CTX *storectx)
+{
+	int retval = 1;
+	unsigned i = 0;
+	unsigned char *ocsp_uri;
+	X509 *cert, *issuer_cert;
+	STACK_OF(X509) *certs = X509_STORE_CTX_get1_chain(storectx);
+	unsigned cert_list_size = sk_X509_num(certs);
+
+	while (retval == 1) {
+		cert = sk_X509_value(certs, i);
+		if (++i == cert_list_size)
+			break;
+
+		issuer_cert = sk_X509_value(certs, ++i);
+
+		ocsp_uri = get_ocsp_uri(cert);
+		if (verify_one_ocsp((ocsp_uri ? (const char *) ocsp_uri : _config.ocsp_server),
+				certs, cert, issuer_cert,
+				X509_STORE_CTX_get0_store(storectx)) < 0)
+			retval = 0;
+
+		X509_free(cert);
+		if (ocsp_uri)
+			OPENSSL_free(ocsp_uri);
+	}
+
+	return retval;
+}
+
+static int verify_one_hpkp(const char *hostname, X509 *subject_cert)
 {
 	int retval, spki_len;
 	unsigned char *spki = NULL;
@@ -467,14 +756,7 @@ static int verify_hpkp(const char *hostname, X509 *subject_cert)
 	return retval;
 }
 
-/*
- * This is our custom revocation check function.
- * It will be invoked by OpenSSL at some point during the TLS handshake.
- * It takes the server's certificate chain, and its purpose is to check the revocation
- * status for each certificate in it. We validate certs against HPKP and OCSP here.
- * This function should return 1 on success (the whole cert chain is valid) and 0 on failure.
- */
-static int _openssl_revocation_check_fn(X509_STORE_CTX *storectx)
+static int verify_hpkp(X509_STORE_CTX *storectx)
 {
 	int pin_ok = 0, retval;
 	X509 *cert = NULL;
@@ -484,14 +766,10 @@ static int _openssl_revocation_check_fn(X509_STORE_CTX *storectx)
 
 	hostname = CRYPTO_get_ex_data(&_crypto_ex_data, _ex_data_idx);
 
-	/* Check the whole cert chain against HPKP database */
-	if (!_config.hpkp_cache)
-		return 1;
-
 	for (unsigned i = 0; i < cert_list_size; i++) {
 		cert = sk_X509_value(certs, i);
 
-		if ((retval = verify_hpkp(hostname, cert)) >= 0)
+		if ((retval = verify_one_hpkp(hostname, cert)) >= 0)
 			pin_ok = 1;
 		if (retval == 1)
 			break;
@@ -501,6 +779,28 @@ static int _openssl_revocation_check_fn(X509_STORE_CTX *storectx)
 		error_printf(_("Public key pinning mismatch.\n"));
 
 	return pin_ok;
+}
+
+/*
+ * This is our custom revocation check function.
+ * It will be invoked by OpenSSL at some point during the TLS handshake.
+ * It takes the server's certificate chain, and its purpose is to check the revocation
+ * status for each certificate in it. We validate certs against HPKP and OCSP here.
+ * This function should return 1 on success (the whole cert chain is valid) and 0 on failure.
+ */
+static int _openssl_revocation_check_fn(X509_STORE_CTX *storectx)
+{
+	int ocsp_ok = 1, hpkp_ok = 1;
+
+	/* Verify OCSP */
+	if (_config.ocsp)
+		ocsp_ok = verify_ocsp(storectx);
+
+	/* Check the whole cert chain against HPKP database */
+	if (_config.hpkp_cache)
+		hpkp_ok = verify_hpkp(storectx);
+
+	return ocsp_ok & hpkp_ok;
 }
 
 static int openssl_init(SSL_CTX *ctx)
