@@ -2874,13 +2874,37 @@ static inline void G_GNUC_WGET_NONNULL_ALL get_config_files(const char *config_h
 	}
 }
 
-static inline const char *get_xdg_config_home(const char *user_home)
+static const char *get_xdg_data_home(const char *user_home)
+{
+	static const char *data_home = NULL;
+	const char *env;
+
+	if (data_home)
+		return data_home;
+
+#ifdef _WIN32
+	if ((env = getenv("LOCALAPPDATA")) && *env)
+		data_home = wget_aprintf("%s/wget", env);
+	else
+		data_home = wget_strdup(user_home);
+#else
+	if ((env = getenv("XDG_DATA_HOME")) && *env)
+		data_home = wget_aprintf("%s/wget", env);
+	else {
+		data_home = wget_aprintf("%s/.local/share/wget", user_home);
+	}
+#endif
+	mkdir_path(data_home, false);
+	return data_home;
+}
+
+static const char *get_xdg_config_home(const char *user_home)
 {
 	// According to the XDG Basedir Spec, configuration data goes into
 	// $XDG_CONFIG_HOME, or ~/.config. On Windows, the closest alternative is
 	// %LOCALAPPDATA%. We would like to store the Wget2 configuration files
 	// within a separate wget directory.
-	static const char *home_dir;
+	static const char *home_dir = NULL;
 	const char *env;
 
 	if (home_dir)
@@ -2925,6 +2949,7 @@ int init(int argc, const char **argv)
 	// Initialize some configuration values which depend on the Runtime environment
 	char *home_dir = get_home_dir();
 	const char *xdg_config_home = get_xdg_config_home(home_dir);
+	const char *xdg_data_home = get_xdg_data_home(home_dir);
 
 	// We need these because the parse_string() method will attempt to free the
 	// value before setting a new one. Hence, these must be dynamically
@@ -2960,16 +2985,16 @@ int init(int argc, const char **argv)
 	log_init();
 
 	if (config.hsts && !config.hsts_file)
-		config.hsts_file = wget_aprintf("%s/.wget-hsts", home_dir);
+		config.hsts_file = wget_aprintf("%s/.wget-hsts", xdg_data_home);
 
 	if (config.hpkp && !config.hpkp_file)
-		config.hpkp_file = wget_aprintf("%s/.wget-hpkp", home_dir);
+		config.hpkp_file = wget_aprintf("%s/.wget-hpkp", xdg_data_home);
 
 	if (config.tls_resume && !config.tls_session_file)
-		config.tls_session_file = wget_aprintf("%s/.wget-session", home_dir);
+		config.tls_session_file = wget_aprintf("%s/.wget-session", xdg_data_home);
 
 	if (config.ocsp && !config.ocsp_file)
-		config.ocsp_file = wget_aprintf("%s/.wget-ocsp", home_dir);
+		config.ocsp_file = wget_aprintf("%s/.wget-ocsp", xdg_data_home);
 
 	if (config.netrc && !config.netrc_file)
 		config.netrc_file = wget_aprintf("%s/.netrc", home_dir);
