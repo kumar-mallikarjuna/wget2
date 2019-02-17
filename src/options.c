@@ -2583,7 +2583,7 @@ static int G_GNUC_WGET_NONNULL((1)) _read_config(const char *cfgfile, int expand
 
 static bool read_config(void)
 {
-	int ret = true;
+	bool ret = true;
 
 	if (config.system_config)
 		ret = _read_config(config.system_config, 1);
