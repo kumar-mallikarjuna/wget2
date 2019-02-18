@@ -2850,7 +2850,7 @@ static int _preload_dns_cache(const char *fname)
 	return 0;
 }
 
-static inline void G_GNUC_WGET_NONNULL_ALL get_config_files(const char *config_home)
+static inline void G_GNUC_WGET_NONNULL_ALL get_config_files(const char *config_home, const char *user_home)
 {
 	const char *env;
 
@@ -2871,6 +2871,18 @@ static inline void G_GNUC_WGET_NONNULL_ALL get_config_files(const char *config_h
 			config.user_config = wget_strdup(path);
 		else
 			xfree(path);
+	}
+
+	// XXX: This is a compatibility shim and should be removed by the next
+	// release.
+	if (!config.user_config) {
+		const char *path = wget_aprintf("%s/.wget2rc", user_home);
+		if (access(path, R_OK) == 0) {
+			config.user_config = wget_strdup(path);
+			error_printf(_("~/.wget2rc is deprecated. Please move it to %s/wget2rc\n"), config_home);
+		} else {
+			xfree(path);
+		}
 	}
 }
 
@@ -2959,9 +2971,10 @@ int init(int argc, const char **argv)
 	config.ca_directory = wget_strdup(config.ca_directory);
 	config.default_page = wget_strdup(config.default_page);
 
-	get_config_files(xdg_config_home);
-
 	log_init();
+
+	get_config_files(xdg_config_home, home_dir);
+
 
 	// first processing, to respect options that might influence output
 	// while read_config() (e.g. -d, -q, -a, -o)

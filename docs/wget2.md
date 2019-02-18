@@ -1968,11 +1968,12 @@ finds from the following locations:
 2. `$HOME/.config/wget/wget2rc`
 3. `$HOME/.wget2rc`
 
-In the future, support for reading from `$HOME/.wget2rc` may be removed.
+Having an initialization file at `$HOME/.wget2rc` is deprecated. If a file is
+found there, Wget2 will print a warning about it. Support for reading from this
+file will be removed in the future.
 
 The fact that the user's settings are loaded after the system-wide ones means
 that in case of a collision, the user's wget2rc _overrides_ the global wget2rc.
-Fascist admins away!
 
 # <a name="Bugs"/>Bugs
 
