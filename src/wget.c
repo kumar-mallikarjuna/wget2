@@ -3154,7 +3154,7 @@ static int G_GNUC_WGET_NONNULL((1)) _prepare_file(wget_http_response_t *resp, co
 		if (oflag == O_TRUNC)
 			flag = O_TRUNC;
 	} else if (!config.clobber || (config.recursive && config.directories)) {
-		if (oflag == O_TRUNC && (!(config.recursive && config.directories) || (config.page_requisites && !config.clobber))){
+		if (oflag == O_TRUNC && (!(config.recursive && config.directories) || (config.page_requisites && !config.clobber))) {
 			flag = O_EXCL;
 		}
 	} else if (flag != O_APPEND) {
@@ -3229,17 +3229,23 @@ static int G_GNUC_WGET_NONNULL((1)) _prepare_file(wget_http_response_t *resp, co
 		// TODO SAVE UNIQUE-NESS
 	} else {
 		if (fd == -1) {
-			if (errno == EEXIST){
+			if (errno == EEXIST) {
 				error_printf(_("File '%s' already there; not retrieving.\n"), fname);
 
-				if(config.page_requisites && !config.clobber){
+				if (config.page_requisites && !config.clobber) {
 					if (!wget_strcasecmp_ascii(resp->content_type, "text/html") || !wget_strcasecmp_ascii(resp->content_type, "application/xhtml+xml")) {
 						html_parse_localfile(job, job->level, job->local_filename, config.remote_encoding, job->iri);
 					} else if (!wget_strcasecmp_ascii(resp->content_type, "text/css")) {
 						css_parse_localfile(job, job->local_filename, config.remote_encoding, job->iri);
+					} else if (!wget_strcasecmp_ascii(resp->content_type, "text/xml") || !wget_strcasecmp_ascii(resp->content_type, "application/xml")) {
+						sitemap_parse_xml_localfile(job, job->local_filename, "utf-8", job->iri);
+					} else if (!wget_strcasecmp_ascii(resp->content_type, "application/atom+xml")) {
+						atom_parse_localfile(job, job->local_filename, "utf-8", job->iri);
+					} else if (!wget_strcasecmp_ascii(resp->content_type, "application/rss+xml")) {
+						rss_parse_localfile(job, job->local_filename, "utf-8", job->iri);
 					}
 				}
-			}else if (errno == EISDIR)
+			} else if (errno == EISDIR)
 				info_printf(_("Directory / file name clash - not saving '%s'\n"), fname);
 			else {
 				error_printf(_("Failed to open '%s' (errno=%d): %s\n"), fname, errno, strerror(errno));
