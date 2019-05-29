@@ -12,9 +12,10 @@ if [[ $TRAVIS_OS_NAME = 'osx' ]]; then
 	CONFIGURE_OPTIONS+=("")
 	# Install Libmicrohttpd from source
 	cd ..
-	wget https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.55.tar.gz
-	tar zxf libmicrohttpd-0.9.55.tar.gz && cd libmicrohttpd-0.9.55
-	./configure
+#	wget https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.55.tar.gz
+#	tar zxf libmicrohttpd-0.9.55.tar.gz && cd libmicrohttpd-0.9.55
+	git clone --depth 1 https://github.com/maru/libmicrohttpd-http2.git && cd libmicrohttpd-http2/
+	./configure --enable-http2
 	make clean
 	make -j3
 	make install

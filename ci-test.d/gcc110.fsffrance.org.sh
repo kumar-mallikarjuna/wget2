@@ -12,15 +12,17 @@ export CPPFLAGS="-I$INSTALLDIR/include"
 export LDFLAGS="-L$INSTALLDIR/lib"
 
 # Install Libmicrohttpd from source
-if [ ! -d libmicrohttpd ]; then
-  git clone --recursive https://gnunet.org/git/libmicrohttpd.git
-  cd libmicrohttpd
+if [ ! -d libmicrohttpd-http2 ]; then
+#  git clone --recursive https://gnunet.org/git/libmicrohttpd.git
+  git clone --depth 1 https://github.com/maru/libmicrohttpd-http2.git && cd libmicrohttpd-http2/
+#  cd libmicrohttpd
+  cd libmicrohttpd-http2
 else
-  cd libmicrohttpd
+  cd libmicrohttpd-http2
   git pull
 fi
 ./bootstrap
-./configure --prefix=$INSTALLDIR --disable-doc --disable-examples --enable-shared
+./configure --enable-http2 --prefix=$INSTALLDIR --disable-doc --disable-examples --enable-shared
 make clean
 make -j$(nproc)
 make install
