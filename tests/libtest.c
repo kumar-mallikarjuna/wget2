@@ -44,6 +44,7 @@
 #include "libtest.h"
 
 #include <microhttpd.h>
+#include <microhttpd_http2.h>
 #ifndef HAVE_MHD_FREE
 #  define MHD_free wget_free
 #endif
@@ -66,6 +67,7 @@
 static int
 	http_server_port,
 	https_server_port,
+	h2_server_port,
 	keep_tmpfiles,
 	reject_https_connection;
 static wget_vector_t
@@ -90,7 +92,8 @@ enum CHECK_POST_HANDSHAKE_AUTH {
 // MHD_Daemon instance
 static struct MHD_Daemon
 	*httpdaemon,
-	*httpsdaemon;
+	*httpsdaemon,
+	*h2daemon;
 
 // for passing URL query string
 struct query_string {
@@ -106,7 +109,8 @@ static char
 
 enum SERVER_MODE {
 	HTTP_MODE,
-	HTTPS_MODE
+	HTTPS_MODE,
+	H2_MODE
 };
 
 static char *_scan_directory(const char* data)
@@ -235,6 +239,8 @@ static int _answer_to_connection(
 		}
 	}
 #endif
+
+        fprintf(stderr, "%s\t%d\n", version, !!MHD_get_connection_info(connection, MHD_CONNECTION_INFO_PROTOCOL));
 
 	struct MHD_Response *response = NULL;
 	struct query_string query;
@@ -539,6 +545,7 @@ static void _http_server_stop(void)
 {
 	MHD_stop_daemon(httpdaemon);
 	MHD_stop_daemon(httpsdaemon);
+	MHD_stop_daemon(h2daemon);
 
 	wget_xfree(key_pem);
 	wget_xfree(cert_pem);
@@ -570,7 +577,7 @@ static int _http_server_start(int SERVER_MODE)
 
 		if (!httpdaemon)
 			return 1;
-	} else if (SERVER_MODE == HTTPS_MODE) {
+	} else if (SERVER_MODE == HTTPS_MODE || SERVER_MODE == H2_MODE) {
 		size_t size;
 
 		key_pem = wget_read_file(SRCDIR "/certs/x509-server-key.pem", &size);
@@ -582,22 +589,42 @@ static int _http_server_start(int SERVER_MODE)
 			return 1;
 		}
 
-		httpsdaemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY | MHD_USE_TLS
+		if (SERVER_MODE == HTTPS_MODE) {
+			httpsdaemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY | MHD_USE_TLS
 #if MHD_VERSION >= 0x00096302
-				| MHD_USE_POST_HANDSHAKE_AUTH_SUPPORT
+					| MHD_USE_POST_HANDSHAKE_AUTH_SUPPORT
 #endif
-			,
-			port_num, _check_to_accept, NULL, &_answer_to_connection, NULL,
-			MHD_OPTION_HTTPS_MEM_KEY, key_pem,
-			MHD_OPTION_HTTPS_MEM_CERT, cert_pem,
+				,
+				port_num, _check_to_accept, NULL, &_answer_to_connection, NULL,
+				MHD_OPTION_HTTPS_MEM_KEY, key_pem,
+				MHD_OPTION_HTTPS_MEM_CERT, cert_pem,
 #ifdef MHD_OPTION_STRICT_FOR_CLIENT
-			MHD_OPTION_STRICT_FOR_CLIENT, 1,
+				MHD_OPTION_STRICT_FOR_CLIENT, 1,
 #endif
-			MHD_OPTION_END);
+				MHD_OPTION_END);
 
-		if (!httpsdaemon) {
-			wget_error_printf(_("Cannot start the HTTPS server.\n"));
-			return 1;
+			if (!httpsdaemon) {
+				wget_error_printf(_("Cannot start the HTTPS server.\n"));
+				return 1;
+			}
+		} else {
+			h2daemon = MHD_start_daemon(MHD_USE_HTTP2 | MHD_USE_SELECT_INTERNALLY | MHD_USE_TLS
+#if MHD_VERSION >= 0x00096302
+					| MHD_USE_POST_HANDSHAKE_AUTH_SUPPORT
+#endif
+				,
+				port_num, _check_to_accept, NULL, &_answer_to_connection, NULL,
+				MHD_OPTION_HTTPS_MEM_KEY, key_pem,
+				MHD_OPTION_HTTPS_MEM_CERT, cert_pem,
+#ifdef MHD_OPTION_STRICT_FOR_CLIENT
+				MHD_OPTION_STRICT_FOR_CLIENT, 1,
+#endif
+				MHD_OPTION_END);
+
+			if (!h2daemon) {
+				wget_error_printf(_("Cannot start the h2 server.\n"));
+				return 1;
+			}
 		}
 	}
 
@@ -611,6 +638,8 @@ static int _http_server_start(int SERVER_MODE)
 			dinfo = MHD_get_daemon_info(httpdaemon, MHD_DAEMON_INFO_BIND_PORT);
 		else if (SERVER_MODE == HTTPS_MODE)
 			dinfo = MHD_get_daemon_info(httpsdaemon, MHD_DAEMON_INFO_BIND_PORT);
+		else if (SERVER_MODE == H2_MODE)
+			dinfo = MHD_get_daemon_info(h2daemon, MHD_DAEMON_INFO_BIND_PORT);
 
 		if (!dinfo || dinfo->port == 0)
 			return 1;
@@ -620,6 +649,8 @@ static int _http_server_start(int SERVER_MODE)
 			http_server_port = port_num;
 		else if (SERVER_MODE == HTTPS_MODE)
 			https_server_port = port_num;
+		else if (SERVER_MODE == H2_MODE)
+			h2_server_port = port_num;
 	}
 #endif /* MHD_VERSION >= 0x00095501 */
 	else
@@ -631,6 +662,8 @@ static int _http_server_start(int SERVER_MODE)
 			dinfo = MHD_get_daemon_info(httpdaemon, MHD_DAEMON_INFO_LISTEN_FD);
 		else if (SERVER_MODE == HTTPS_MODE)
 			dinfo = MHD_get_daemon_info(httpsdaemon, MHD_DAEMON_INFO_LISTEN_FD);
+		else if (SERVER_MODE == H2_MODE)
+			dinfo = MHD_get_daemon_info(h2daemon, MHD_DAEMON_INFO_LISTEN_FD);
 
 		if (!dinfo)
 			return 1;
@@ -654,6 +687,8 @@ static int _http_server_start(int SERVER_MODE)
 					http_server_port = port_num;
 				else if (SERVER_MODE == HTTPS_MODE)
 					https_server_port = port_num;
+				else if (SERVER_MODE == H2_MODE)
+					h2_server_port = port_num;
 			}
 		}
 	}
@@ -803,6 +838,7 @@ void wget_test_start_server(int first_key, ...)
 	bool start_http = 1;
 #ifdef WITH_TLS
 	bool start_https = 1;
+	bool start_h2 = 1;
 #endif
 
 	wget_global_init(
@@ -834,9 +870,19 @@ void wget_test_start_server(int first_key, ...)
 			break;
 		case WGET_TEST_HTTPS_ONLY:
 			start_http = 0;
+#ifdef WITH_GNUTLS
+			start_h2 = 0;
+#endif
 			break;
 		case WGET_TEST_HTTP_ONLY:
 #ifdef WITH_TLS
+			start_https = 0;
+			start_h2 = 0;
+#endif
+			break;
+		case WGET_TEST_H2_ONLY:
+			start_http = 0;
+#ifdef WITH_GNUTLS
 			start_https = 0;
 #endif
 			break;
@@ -893,6 +939,12 @@ void wget_test_start_server(int first_key, ...)
 	if (start_https) {
 		if ((rc = _http_server_start(HTTPS_MODE)) != 0)
 			wget_error_printf_exit(_("Failed to start HTTPS server, error %d\n"), rc);
+	}
+
+	// start h2 server
+	if (start_h2) {
+		if ((rc = _http_server_start(H2_MODE)) != 0)
+			wget_error_printf_exit(_("Failed to start h2 server, error %d\n"), rc);
 	}
 #endif
 
@@ -1237,6 +1289,11 @@ int wget_test_get_http_server_port(void)
 int wget_test_get_https_server_port(void)
 {
 	return https_server_port;
+}
+
+int wget_test_get_h2_server_port(void)
+{
+	return h2_server_port;
 }
 
 // assume that we are in 'tmpdir'
