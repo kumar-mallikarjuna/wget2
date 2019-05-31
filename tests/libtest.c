@@ -240,8 +240,6 @@ static int _answer_to_connection(
 	}
 #endif
 
-        fprintf(stderr, "%s\t%d\n", version, !!MHD_get_connection_info(connection, MHD_CONNECTION_INFO_PROTOCOL));
-
 	struct MHD_Response *response = NULL;
 	struct query_string query;
 	int ret = 0;
@@ -804,7 +802,7 @@ static char *_insert_ports(const char *src)
 				continue;
 			}
 			else if (!strncmp(src, "{{sslport}}", 11)) {
-				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", https_server_port);
+				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
 				src += 11;
 				continue;
 			}

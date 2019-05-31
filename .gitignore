@@ -80,3 +80,6 @@ src/version-text.h
 stamp-h1
 test-driver
 wget2-*
+
+*.swp
+.sc-start-sc_prohibit_empty_lines_at_EOF
