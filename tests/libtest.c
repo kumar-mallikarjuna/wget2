@@ -170,7 +170,7 @@ static int _print_header_range(
 {
 	wget_buffer_t *header_range = cls;
 
-	if (!strcmp(key, MHD_HTTP_HEADER_RANGE)) {
+	if (!strcasecmp(key, MHD_HTTP_HEADER_RANGE)) {
 		wget_buffer_strcpy(header_range, key);
 		if (value) {
 			wget_buffer_strcat(header_range, value);
@@ -486,7 +486,7 @@ static int _answer_to_connection(
 					to_bytes = body_length - 1;
 				body_len = to_bytes - from_bytes + 1;
 
-				if (from_bytes > to_bytes || from_bytes >= (int) body_length) {
+				if (from_bytes > to_bytes || from_bytes >= (int) body_length) {	
 					response = MHD_create_response_from_buffer(0, (void *) "", MHD_RESPMEM_PERSISTENT);
 					ret = MHD_queue_response(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, response);
 				} else {
@@ -647,8 +647,11 @@ static int _http_server_start(int SERVER_MODE)
 			http_server_port = port_num;
 		else if (SERVER_MODE == HTTPS_MODE)
 			https_server_port = port_num;
-		else if (SERVER_MODE == H2_MODE)
+		else if (SERVER_MODE == H2_MODE) {
 			h2_server_port = port_num;
+
+			printf("\nh2 server started at: %d\n", h2_server_port);
+		}
 	}
 #endif /* MHD_VERSION >= 0x00095501 */
 	else
@@ -797,7 +800,7 @@ static char *_insert_ports(const char *src)
 	while (*src) {
 		if (*src == '{') {
 			if (!strncmp(src, "{{port}}", 8)) {
-				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", http_server_port);
+				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
 				src += 8;
 				continue;
 			}
@@ -1177,7 +1180,7 @@ void wget_test(int first_key, ...)
 
 	for (it = 0; it < (size_t)wget_vector_size(request_urls); it++) {
 		request_url = wget_vector_get(request_urls, it);
-
+		
 		if (!wget_strncasecmp_ascii(request_url, "http://", 7)
 			|| !wget_strncasecmp_ascii(request_url, "https://", 8))
 		{
@@ -1185,11 +1188,12 @@ void wget_test(int first_key, ...)
 			wget_buffer_printf_append(cmd, " \"%s\"", tmp ? tmp : request_url);
 			wget_xfree(tmp);
 		} else {
-			wget_buffer_printf_append(cmd, " \"http://localhost:%d/%s\"",
-				http_server_port, request_url);
+			wget_buffer_printf_append(cmd, " \"https://localhost:%d/%s\"",
+				h2_server_port, request_url);
 		}
 	}
-	wget_buffer_strcat(cmd, " 2>&1");
+	wget_buffer_strcat(cmd, " --https-enforce=hard --no-check-certificate 2>&1");
+//	wget_buffer_strcat(cmd, " 2>&1");
 
 	wget_info_printf("cmd=%s\n", cmd->data);
 	wget_error_printf(_("\n  Testing '%s'\n"), cmd->data);

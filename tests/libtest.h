@@ -154,6 +154,7 @@ WGETAPI void wget_test(int first_key, ...);
 WGETAPI int wget_test_check_file_system(void);
 WGETAPI int wget_test_get_http_server_port(void) G_GNUC_WGET_PURE;
 WGETAPI int wget_test_get_https_server_port(void) G_GNUC_WGET_PURE;
+WGETAPI int wget_test_get_h2_server_port(void) G_GNUC_WGET_PURE;
 
 #if defined __clang__ || __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5)
 #	pragma GCC diagnostic ignored "-Wmissing-field-initializers"
