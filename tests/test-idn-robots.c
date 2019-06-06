@@ -74,7 +74,8 @@ int main(void)
 
 	// test-idn-robots
 	wget_snprintf(options, sizeof(options),
-		"--iri -e robots=on -rH -e http_proxy=localhost:%d --local-encoding=EUC-JP http://" euc_jp_hostname "/",
+		"--iri -e robots=on -rH -e http_proxy=localhost:%d -e https_proxy=localhost:%d --local-encoding=EUC-JP http://" euc_jp_hostname "/",
+		wget_test_get_http_server_port(),
 		wget_test_get_h2_server_port());
 
 	wget_test(
@@ -93,7 +94,8 @@ int main(void)
 #ifndef _WIN32
 	// test-idn-robots-utf8
 	wget_snprintf(options, sizeof(options),
-		"--iri -e robots=on -rH -e http_proxy=localhost:%d --local-encoding=UTF-8 http://" utf8_hostname "/",
+		"--iri -e robots=on -rH -e http_proxy=localhost:%d -e https_proxy=localhost:%d --local-encoding=UTF-8 http://" utf8_hostname "/",
+		wget_test_get_http_server_port(),
 		wget_test_get_h2_server_port());
 
 	urls[0].body = "<a href=\"http://" utf8_hostname "/foo.txt\">The link</a>";
