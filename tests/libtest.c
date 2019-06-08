@@ -1048,9 +1048,9 @@ void wget_test(int first_key, ...)
 		*request_url,
 		*options = "",
 #ifdef _WIN32
-		*executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10";
+		*executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
 #else
-		*executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10";
+		*executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
 #endif
 	const wget_test_file_t
 		*expected_files = NULL,
@@ -1193,8 +1193,7 @@ void wget_test(int first_key, ...)
 				h2_server_port, request_url);
 		}
 	}
-	wget_buffer_strcat(cmd, " --https-enforce=hard --no-check-certificate 2>&1");
-//	wget_buffer_strcat(cmd, " 2>&1");
+	wget_buffer_strcat(cmd, " 2>&1");
 
 	wget_info_printf("cmd=%s\n", cmd->data);
 	wget_error_printf(_("\n  Testing '%s'\n"), cmd->data);
@@ -1286,12 +1285,12 @@ void wget_test(int first_key, ...)
 
 int wget_test_get_http_server_port(void)
 {
-	return http_server_port;
+	return h2_server_port;
 }
 
 int wget_test_get_https_server_port(void)
 {
-	return https_server_port;
+	return h2_server_port;
 }
 
 int wget_test_get_h2_server_port(void)
