@@ -872,9 +872,9 @@ void wget_test_start_server(int first_key, ...)
 			break;
 		case WGET_TEST_HTTPS_ONLY:
 			start_http = 0;
-#ifdef WITH_GNUTLS
+/*#ifdef WITH_GNUTLS
 			start_h2 = 0;
-#endif
+#endif*/
 			break;
 		case WGET_TEST_HTTP_ONLY:
 #ifdef WITH_TLS
@@ -910,6 +910,9 @@ void wget_test_start_server(int first_key, ...)
 			wget_error_printf(_("Plugin Support Disabled. Skipping\n"));
 			exit(WGET_TEST_EXIT_SKIP);
 #endif
+			break;
+		case WGET_TEST_SKIP_H2:
+			exit(WGET_TEST_EXIT_SKIP);
 			break;
 		default:
 			wget_error_printf(_("Unknown option %d\n"), key);
