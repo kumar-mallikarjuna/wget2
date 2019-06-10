@@ -618,6 +618,7 @@ static int _http_server_start(int SERVER_MODE)
 #ifdef MHD_OPTION_STRICT_FOR_CLIENT
 				MHD_OPTION_STRICT_FOR_CLIENT, 1,
 #endif
+				MHD_OPTION_CONNECTION_MEMORY_LIMIT, 1*1024*1024,    //Enough to send 1MB files through
 				MHD_OPTION_END);
 
 			if (!h2daemon) {
