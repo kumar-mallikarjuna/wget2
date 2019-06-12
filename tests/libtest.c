@@ -113,6 +113,14 @@ enum SERVER_MODE {
 	H2_MODE
 };
 
+static enum PASS {
+	HTTP_1_1_PASS,
+	H2_PASS,
+	END_PASS
+} proto_pass;
+
+static int skip_h2 = 0;
+
 static char *_scan_directory(const char* data)
 {
 	return strchr(data, '/');
@@ -802,12 +810,20 @@ static char *_insert_ports(const char *src)
 	while (*src) {
 		if (*src == '{') {
 			if (!strncmp(src, "{{port}}", 8)) {
-				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+				if (proto_pass == H2_PASS) {
+					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+				} else {
+					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", http_server_port);
+				}
 				src += 8;
 				continue;
 			}
 			else if (!strncmp(src, "{{sslport}}", 11)) {
-				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+				if (proto_pass == H2_PASS) {
+					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+				} else {
+					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", https_server_port);
+				}
 				src += 11;
 				continue;
 			}
@@ -878,6 +894,7 @@ void wget_test_start_server(int first_key, ...)
 #endif*/
 			break;
 		case WGET_TEST_HTTP_ONLY:
+			skip_h2 = 1;
 #ifdef WITH_TLS
 			start_https = 0;
 			start_h2 = 0;
@@ -913,7 +930,7 @@ void wget_test_start_server(int first_key, ...)
 #endif
 			break;
 		case WGET_TEST_SKIP_H2:
-			exit(WGET_TEST_EXIT_SKIP);
+			skip_h2 = 1;
 			break;
 		default:
 			wget_error_printf(_("Unknown option %d\n"), key);
@@ -953,25 +970,6 @@ void wget_test_start_server(int first_key, ...)
 			wget_error_printf_exit(_("Failed to start h2 server, error %d\n"), rc);
 	}
 #endif
-
-	// now replace {{port}} in the body by the actual server port
-	for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
-		char *p = _insert_ports(url->body);
-
-		if (p) {
-			url->body = p;
-			url->body_alloc = 1;
-		}
-
-		for (unsigned it = 0; it < countof(url->headers) && url->headers[it]; it++) {
-			p = _insert_ports(url->headers[it]);
-
-			if (p) {
-				url->headers[it] = p;
-				url->header_alloc[it] = 1;
-			}
-		}
-	}
 }
 
 static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *expected_files)
@@ -1048,14 +1046,36 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 
 void wget_test(int first_key, ...)
 {
+	proto_pass = 1;
+
+	for (;proto_pass<2;proto_pass++) {
+		if(proto_pass == H2_PASS && skip_h2 == 1)
+			continue;
+
+	// now replace {{port}} in the body by the actual server port
+	for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
+		char *p = _insert_ports(url->body);
+
+		if (p) {
+			url->body = p;
+			url->body_alloc = 1;
+		}
+
+		for (unsigned it = 0; it < countof(url->headers) && url->headers[it]; it++) {
+			p = _insert_ports(url->headers[it]);
+
+			if (p) {
+				url->headers[it] = p;
+				url->header_alloc[it] = 1;
+			}
+		}
+	}
+
+
 	const char
 		*request_url,
 		*options = "",
-#ifdef _WIN32
-		*executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
-#else
-		*executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
-#endif
+		*executable = wget_malloc(1024);
 	const wget_test_file_t
 		*expected_files = NULL,
 		*existing_files = NULL;
@@ -1074,6 +1094,18 @@ void wget_test(int first_key, ...)
 		server_send_content_length_old = server_send_content_length;
 	bool
 		options_alloc = 0;
+
+#ifdef _WIN32
+	if(proto_pass == H2_PASS)
+		sprintf(executable, "%s", BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp");
+	else
+		sprintf(executable, "%s", BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10");
+#else
+	if(proto_pass == H2_PASS)
+		sprintf(executable, "%s", BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp");
+	else
+		sprintf(executable, "%s", BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10");
+#endif
 
 	keep_tmpfiles = 0;
 
@@ -1147,12 +1179,19 @@ void wget_test(int first_key, ...)
 				}
 			}
 			else if ((fd = open(existing_files[it].name, O_CREAT|O_WRONLY|O_TRUNC|O_BINARY, 0644)) != -1) {
-				ssize_t nbytes = write(fd, existing_files[it].content, strlen(existing_files[it].content));
+				char *existing_content = _insert_ports(existing_files[it].content);
+				bool existing_content_alloc = 0;
+				if (!existing_content)
+					existing_content = existing_files[it].content;
+				else
+					existing_content_alloc = 1;
+
+				ssize_t nbytes = write(fd, existing_content, strlen(existing_content));
 				close(fd);
 
-				if (nbytes != (ssize_t)strlen(existing_files[it].content))
+				if (nbytes != (ssize_t)strlen(existing_content))
 					wget_error_printf_exit(_("Failed to write %zu bytes to file %s/%s [%s]\n"),
-						strlen(existing_files[it].content), tmpdir, existing_files[it].name, options);
+						strlen(existing_content), tmpdir, existing_files[it].name, options);
 
 				if (existing_files[it].timestamp) {
 					// take the old utime() instead of utimes()
@@ -1160,6 +1199,9 @@ void wget_test(int first_key, ...)
 						wget_error_printf_exit(_("Failed to set mtime of %s/%s [%s]\n"),
 							tmpdir, existing_files[it].name, options);
 				}
+
+				if(existing_content_alloc)
+					wget_xfree(existing_content);
 
 			} else {
 				wget_error_printf_exit(_("Failed to write open file %s/%s [%s] (%d,%s)\n"),
@@ -1193,10 +1235,16 @@ void wget_test(int first_key, ...)
 			wget_buffer_printf_append(cmd, " \"%s\"", tmp ? tmp : request_url);
 			wget_xfree(tmp);
 		} else {
-			wget_buffer_printf_append(cmd, " \"https://localhost:%d/%s\"",
+			if(proto_pass == H2_PASS) {
+				wget_buffer_printf_append(cmd, " \"https://localhost:%d/%s\"",
 				h2_server_port, request_url);
+			} else {
+				wget_buffer_printf_append(cmd, " \"http://localhost:%d/%s\"",
+				http_server_port, request_url);
+			}
 		}
 	}
+
 	wget_buffer_strcat(cmd, " 2>&1");
 
 	wget_info_printf("cmd=%s\n", cmd->data);
@@ -1251,10 +1299,20 @@ void wget_test(int first_key, ...)
 						wget_error_printf_exit(_("Failed to read %lld bytes from file '%s/%s', just got %zd [%s]\n"),
 							(long long)st.st_size, tmpdir, fname, nbytes, options);
 
-					size_t content_length = expected_files[it].content_length ? expected_files[it].content_length : strlen(expected_files[it].content);
+					char *expected_content = _insert_ports(expected_files[it].content);
+					bool expected_content_alloc = 0;
+					if (!expected_content)
+						expected_content = expected_files[it].content;
+					else
+						expected_content_alloc = 1;
 
-					if (content_length != (size_t) nbytes || memcmp(expected_files[it].content, content, nbytes) != 0)
+					size_t content_length = expected_files[it].content_length ? expected_files[it].content_length : strlen(expected_content);
+
+					if (content_length != (size_t) nbytes || memcmp(expected_content, content, nbytes) != 0)
 						wget_error_printf_exit(_("Unexpected content in %s [%s]\n"), fname, options);
+
+					if(expected_content_alloc)
+						wget_xfree(expected_content);
 				}
 
 				wget_xfree(content);
@@ -1285,16 +1343,19 @@ void wget_test(int first_key, ...)
 	server_send_content_length = server_send_content_length_old;
 
 	// system("ls -la");
+	}
+
+	proto_pass = 1;
 }
 
 int wget_test_get_http_server_port(void)
 {
-	return h2_server_port;
+	return proto_pass == H2_PASS ? h2_server_port : http_server_port;
 }
 
 int wget_test_get_https_server_port(void)
 {
-	return h2_server_port;
+	return proto_pass == H2_PASS ? h2_server_port : https_server_port;
 }
 
 int wget_test_get_h2_server_port(void)
