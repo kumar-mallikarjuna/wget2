@@ -630,16 +630,16 @@ static int regex_match(const char *string, const char *pattern)
 static void parse_local_file(const char *fname, wget_iri_t *base)
 {
 	int fd;
-	char mimetype[64] = "", charset[32] = "";
+	char mimetype[64], charset[32];
 
 	if ((fd = open(fname, O_RDONLY)) == -1)
 		return;
 
-	if (read_xattr_metadata("user.mimetype", mimetype, sizeof(mimetype) - 1, fd) == 0)
-		mimetype[sizeof(mimetype) - 1] = 0;
+	if (read_xattr_metadata("user.mimetype", mimetype, sizeof(mimetype), fd) < 0)
+		*mimetype = 0;
 
-	if (read_xattr_metadata("user.charset", charset, sizeof(charset) - 1, fd) == 0)
-		charset[sizeof(charset) - 1] = 0;
+	if (read_xattr_metadata("user.charset", charset, sizeof(charset), fd) < 0)
+		*charset = 0;
 
 	close(fd);
 
