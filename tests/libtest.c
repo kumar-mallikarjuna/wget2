@@ -73,7 +73,8 @@ static int
 static wget_vector_t
 	*request_urls;
 static wget_test_url_t
-	*urls;
+	*urls,
+	*urls_original;
 static size_t
 	nurls;
 static char
@@ -774,6 +775,8 @@ void wget_test_stop_server(void)
 //	wget_vector_free(&response_headers);
 	wget_vector_free(&request_urls);
 
+	wget_xfree(urls_original);
+
 	for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
 		if (url->body_alloc) {
 			wget_xfree(url->body);
@@ -883,6 +886,8 @@ void wget_test_start_server(int first_key, ...)
 */		case WGET_TEST_RESPONSE_URLS:
 			urls = va_arg(args, wget_test_url_t *);
 			nurls = va_arg(args, size_t);
+			urls_original = wget_malloc(sizeof(wget_test_url_t)*nurls);
+			memcpy(urls_original, urls, sizeof(wget_test_url_t)*nurls);
 			break;
 		case WGET_TEST_SERVER_SEND_CONTENT_LENGTH:
 			server_send_content_length = !!va_arg(args, int);
@@ -902,7 +907,7 @@ void wget_test_start_server(int first_key, ...)
 			break;
 		case WGET_TEST_H2_ONLY:
 			start_http = 0;
-#ifdef WITH_GNUTLS
+#ifdef WITH_TLS
 			start_https = 0;
 #endif
 			break;
@@ -1053,16 +1058,28 @@ void wget_test(int first_key, ...)
 			continue;
 
 	// now replace {{port}} in the body by the actual server port
-	for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
-		char *p = _insert_ports(url->body);
+	for (size_t i = 0; i < nurls; i++) {
+		wget_test_url_t *url = urls + i;
+		wget_test_url_t *url_original = urls_original + i;
+		if(url->body_alloc){
+			wget_xfree(url->body);
+			url->body_alloc = 0;
+		}
+
+		char *p = _insert_ports(url_original->body);
 
 		if (p) {
 			url->body = p;
 			url->body_alloc = 1;
 		}
 
-		for (unsigned it = 0; it < countof(url->headers) && url->headers[it]; it++) {
-			p = _insert_ports(url->headers[it]);
+		for (unsigned it = 0; it < countof(url_original->headers) && url_original->headers[it]; it++) {
+			if(url->header_alloc[it]){
+				wget_xfree(url->headers[it]);
+				url->header_alloc[it] = 0;
+			}
+
+			p = _insert_ports(url_original->headers[it]);
 
 			if (p) {
 				url->headers[it] = p;
