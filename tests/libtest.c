@@ -118,7 +118,7 @@ static enum PASS {
 	HTTP_1_1_PASS,
 	H2_PASS,
 	END_PASS
-} proto_pass = 0;
+} proto_pass;
 
 static int skip_h2 = 0;
 
@@ -1051,7 +1051,7 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 
 void wget_test(int first_key, ...)
 {
-	for (;proto_pass<END_PASS;proto_pass++) {
+	for (proto_pass = 0; proto_pass < END_PASS; proto_pass++) {
 		if(proto_pass == H2_PASS && skip_h2 == 1)
 			continue;
 
@@ -1089,8 +1089,8 @@ void wget_test(int first_key, ...)
 		const char
 			*request_url,
 			*options = "";
-		char
-			*executable = wget_malloc(1024);
+		const char
+			*executable;
 		const wget_test_file_t
 			*expected_files = NULL,
 			*existing_files = NULL;
@@ -1112,14 +1112,14 @@ void wget_test(int first_key, ...)
 
 #ifdef _WIN32
 		if(proto_pass == H2_PASS)
-			sprintf(executable, "%s", BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp");
+			executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
 		else
-			sprintf(executable, "%s", BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10");
+			executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10";
 #else
 		if(proto_pass == H2_PASS)
-			sprintf(executable, "%s", BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp");
+			executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
 		else
-			sprintf(executable, "%s", BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10");
+			executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10";
 #endif
 
 		keep_tmpfiles = 0;
@@ -1359,8 +1359,6 @@ void wget_test(int first_key, ...)
 
 		// system("ls -la");
 	}
-
-	proto_pass = 0;
 }
 
 int wget_test_get_http_server_port(void)
