@@ -120,8 +120,6 @@ static enum PASS {
 	END_PASS
 } proto_pass;
 
-static int skip_h2 = 0;
-
 static char *_scan_directory(const char* data)
 {
 	return strchr(data, '/');
@@ -899,7 +897,6 @@ void wget_test_start_server(int first_key, ...)
 #endif*/
 			break;
 		case WGET_TEST_HTTP_ONLY:
-			skip_h2 = 1;
 #ifdef WITH_TLS
 			start_https = 0;
 			start_h2 = 0;
@@ -935,7 +932,7 @@ void wget_test_start_server(int first_key, ...)
 #endif
 			break;
 		case WGET_TEST_SKIP_H2:
-			skip_h2 = 1;
+			start_h2 = 0;
 			break;
 		default:
 			wget_error_printf(_("Unknown option %d\n"), key);
@@ -1052,7 +1049,9 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 void wget_test(int first_key, ...)
 {
 	for (proto_pass = 0; proto_pass < END_PASS; proto_pass++) {
-		if(proto_pass == H2_PASS && skip_h2 == 1)
+		if (proto_pass == HTTP_1_1_PASS && !httpdaemon && !httpsdaemon)
+			continue;
+		if (proto_pass == H2_PASS && !h2daemon)
 			continue;
 
 		// now replace {{port}} in the body by the actual server port
