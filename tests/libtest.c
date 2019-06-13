@@ -127,7 +127,7 @@ static char *_scan_directory(const char* data)
 	return strchr(data, '/');
 }
 
-static char *_parse_hostname(const char* data)
+static const char *_parse_hostname(const char* data)
 {
 	if (!wget_strncasecmp_ascii(data, "http://", 7)) {
 		return strchr(data += 7, '/');
@@ -1088,7 +1088,8 @@ void wget_test(int first_key, ...)
 
 		const char
 			*request_url,
-			*options = "",
+			*options = "";
+		char
 			*executable = wget_malloc(1024);
 		const wget_test_file_t
 			*expected_files = NULL,
@@ -1193,7 +1194,7 @@ void wget_test(int first_key, ...)
 					}
 				}
 				else if ((fd = open(existing_files[it].name, O_CREAT|O_WRONLY|O_TRUNC|O_BINARY, 0644)) != -1) {
-					char *existing_content = _insert_ports(existing_files[it].content);
+					const char *existing_content = _insert_ports(existing_files[it].content);
 					bool existing_content_alloc = 0;
 					if (!existing_content)
 						existing_content = existing_files[it].content;
@@ -1313,7 +1314,7 @@ void wget_test(int first_key, ...)
 							wget_error_printf_exit(_("Failed to read %lld bytes from file '%s/%s', just got %zd [%s]\n"),
 								(long long)st.st_size, tmpdir, fname, nbytes, options);
 
-						char *expected_content = _insert_ports(expected_files[it].content);
+						const char *expected_content = _insert_ports(expected_files[it].content);
 						bool expected_content_alloc = 0;
 						if (!expected_content)
 							expected_content = expected_files[it].content;

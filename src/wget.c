@@ -627,41 +627,54 @@ static int regex_match(const char *string, const char *pattern)
 #endif
 }
 
-static void parse_local_file(const char *fname, wget_iri_t *base)
+static void parse_localfile(JOB *job, const char *fname, const char *encoding, const char *mimetype, wget_iri_t *base)
 {
 	int fd;
-	char mimetype[64], charset[32];
+	int level = job ? job->level : 0;
+	char _mimetype[64], _encoding[32];
 
 	if ((fd = open(fname, O_RDONLY)) == -1)
 		return;
 
-	if (read_xattr_metadata("user.mimetype", mimetype, sizeof(mimetype), fd) < 0)
-		*mimetype = 0;
+	if (!mimetype) {
+		if (read_xattr_metadata("user.mimetype", _mimetype, sizeof(_mimetype), fd) < 0)
+			*_mimetype = 0;
+		else if (*_mimetype)
+			mimetype = _mimetype;
+	}
 
-	if (read_xattr_metadata("user.charset", charset, sizeof(charset), fd) < 0)
-		*charset = 0;
+	if (!encoding) {
+		if (read_xattr_metadata("user.charset", _encoding, sizeof(_encoding), fd) < 0)
+			*_encoding = 0;
+		else if (*_encoding)
+			encoding = _encoding;
+	}
 
 	close(fd);
 
-	if (*mimetype) {
+	if (mimetype) {
 		if (!wget_strcasecmp_ascii(mimetype, "text/html") || !wget_strcasecmp_ascii(mimetype, "application/xhtml+xml")) {
-			html_parse_localfile(NULL, 0, fname, *charset ? charset : NULL, base);
+			html_parse_localfile(job, level, fname, encoding, base);
 		} else if (!wget_strcasecmp_ascii(mimetype, "text/css")) {
-			css_parse_localfile(NULL, fname, *charset ? charset : NULL, base);
+			css_parse_localfile(job, fname, encoding, base);
 		} else if (!wget_strcasecmp_ascii(mimetype, "text/xml") || !wget_strcasecmp_ascii(mimetype, "application/xml")) {
-			sitemap_parse_xml_localfile(NULL, fname, *charset ? charset : "utf-8", base);
+			sitemap_parse_xml_localfile(job, fname, encoding ? encoding : "utf-8", base);
 		} else if (!wget_strcasecmp_ascii(mimetype, "application/atom+xml")) {
-			atom_parse_localfile(NULL, fname, *charset ? charset : "utf-8", base);
+			atom_parse_localfile(job, fname, encoding ? encoding : "utf-8", base);
 		} else if (!wget_strcasecmp_ascii(mimetype, "application/rss+xml")) {
-			rss_parse_localfile(NULL, fname, *charset ? charset : "utf-8", base);
+			rss_parse_localfile(job, fname, encoding ? encoding : "utf-8", base);
 		}
 	} else {
-		if (!wget_match_tail_nocase(fname, ".html") || !wget_match_tail_nocase(fname, ".htm")) {
-			html_parse_localfile(NULL, 0, fname, *charset ? charset : NULL, base);
-		} else if (!wget_match_tail_nocase(fname, ".css")) {
-			css_parse_localfile(NULL, fname, *charset ? charset : NULL, base);
-		} else if (!wget_match_tail_nocase(fname, ".rss")) {
-			rss_parse_localfile(NULL, fname, *charset ? charset : "utf-8", base);
+		const char *ext = strrchr(fname, '.');
+
+		if (ext) {
+			if (!wget_strcasecmp_ascii(ext, ".html") || !wget_strcasecmp_ascii(ext, ".htm")) {
+				html_parse_localfile(job, level, fname, encoding, base);
+			} else if (!wget_strcasecmp_ascii(ext, ".css")) {
+				css_parse_localfile(job, fname, encoding, base);
+			} else if (!wget_strcasecmp_ascii(ext, ".rss")) {
+				rss_parse_localfile(job, fname, encoding ? encoding : "utf-8", base);
+			}
 		}
 	}
 }
@@ -741,7 +754,7 @@ static void add_url_to_queue(const char *url, wget_iri_t *base, const char *enco
 		debug_printf("not requesting '%s'. (File already exists)\n", iri->uri);
 		wget_thread_mutex_unlock(downloader_mutex);
 		if (config.recursive || config.page_requisites) {
-			parse_local_file(local_filename, iri);
+			parse_localfile(NULL, local_filename, NULL, NULL, iri);
 		}
 		xfree(local_filename);
 		plugin_db_forward_url_verdict_free(&plugin_verdict);
@@ -960,7 +973,7 @@ static void add_url(JOB *job, const char *encoding, const char *url, int flags)
 			info_printf(_("URL '%s' not requested (file already exists)\n"), iri->uri);
 			wget_thread_mutex_unlock(downloader_mutex);
 			if (config.recursive && (!config.level || (job && job->level < config.level + config.page_requisites))) {
-				parse_local_file(local_filename, iri);
+				parse_localfile(job, local_filename, encoding, NULL, iri);
 			}
 			// do not 'goto out;' here
 			xfree(local_filename);
