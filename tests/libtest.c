@@ -118,7 +118,7 @@ static enum PASS {
 	HTTP_1_1_PASS,
 	H2_PASS,
 	END_PASS
-} proto_pass;
+} proto_pass = 0;
 
 static int skip_h2 = 0;
 
@@ -1051,9 +1051,7 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 
 void wget_test(int first_key, ...)
 {
-	proto_pass = 1;
-
-	for (;proto_pass<2;proto_pass++) {
+	for (;proto_pass<END_PASS;proto_pass++) {
 		if(proto_pass == H2_PASS && skip_h2 == 1)
 			continue;
 
@@ -1361,7 +1359,7 @@ void wget_test(int first_key, ...)
 		// system("ls -la");
 	}
 
-	proto_pass = 1;
+	proto_pass = 0;
 }
 
 int wget_test_get_http_server_port(void)
