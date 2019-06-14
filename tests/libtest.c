@@ -494,7 +494,7 @@ static int _answer_to_connection(
 					to_bytes = body_length - 1;
 				body_len = to_bytes - from_bytes + 1;
 
-				if (from_bytes > to_bytes || from_bytes >= (int) body_length) {	
+				if (from_bytes > to_bytes || from_bytes >= (int) body_length) {
 					response = MHD_create_response_from_buffer(0, (void *) "", MHD_RESPMEM_PERSISTENT);
 					ret = MHD_queue_response(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, response);
 				} else {
@@ -1048,11 +1048,21 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 
 void wget_test(int first_key, ...)
 {
+#ifndef WITH_LIBNGHTTP2
+	if(!httpdaemon && !httpsdaemon)
+		exit(WGET_TEST_EXIT_SKIP);
+#endif
+
 	for (proto_pass = 0; proto_pass < END_PASS; proto_pass++) {
 		if (proto_pass == HTTP_1_1_PASS && !httpdaemon && !httpsdaemon)
 			continue;
-		if (proto_pass == H2_PASS && !h2daemon)
+		if (proto_pass == H2_PASS) {
+#ifndef WITH_LIBNGHTTP2
 			continue;
+#endif
+			if(!h2daemon)
+				continue;
+		}
 
 		// now replace {{port}} in the body by the actual server port
 		for (size_t i = 0; i < nurls; i++) {
@@ -1241,7 +1251,7 @@ void wget_test(int first_key, ...)
 
 		for (it = 0; it < (size_t)wget_vector_size(request_urls); it++) {
 			request_url = wget_vector_get(request_urls, it);
-			
+
 			if (!wget_strncasecmp_ascii(request_url, "http://", 7)
 				|| !wget_strncasecmp_ascii(request_url, "https://", 8))
 			{
