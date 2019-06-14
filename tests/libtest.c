@@ -615,7 +615,9 @@ static int _http_server_start(int SERVER_MODE)
 				wget_error_printf(_("Cannot start the HTTPS server.\n"));
 				return 1;
 			}
-		} else {
+		}
+#ifdef HAVE_MICROHTTPD_HTTP2_H
+		else {
 			h2daemon = MHD_start_daemon(MHD_USE_HTTP2 | MHD_USE_SELECT_INTERNALLY | MHD_USE_TLS
 #if MHD_VERSION >= 0x00096302
 					| MHD_USE_POST_HANDSHAKE_AUTH_SUPPORT
@@ -635,6 +637,9 @@ static int _http_server_start(int SERVER_MODE)
 				return 1;
 			}
 		}
+#else
+		wget_debug_printf("h2 server failed to start. h2 support unavailable for MHD'");
+#endif
 	}
 
 	// get open random port number
@@ -647,8 +652,10 @@ static int _http_server_start(int SERVER_MODE)
 			dinfo = MHD_get_daemon_info(httpdaemon, MHD_DAEMON_INFO_BIND_PORT);
 		else if (SERVER_MODE == HTTPS_MODE)
 			dinfo = MHD_get_daemon_info(httpsdaemon, MHD_DAEMON_INFO_BIND_PORT);
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 		else if (SERVER_MODE == H2_MODE)
 			dinfo = MHD_get_daemon_info(h2daemon, MHD_DAEMON_INFO_BIND_PORT);
+#endif
 
 		if (!dinfo || dinfo->port == 0)
 			return 1;
@@ -658,11 +665,13 @@ static int _http_server_start(int SERVER_MODE)
 			http_server_port = port_num;
 		else if (SERVER_MODE == HTTPS_MODE)
 			https_server_port = port_num;
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 		else if (SERVER_MODE == H2_MODE) {
 			h2_server_port = port_num;
 
 			printf("\nh2 server started at: %d\n", h2_server_port);
 		}
+#endif
 	}
 #endif /* MHD_VERSION >= 0x00095501 */
 	else
@@ -674,8 +683,10 @@ static int _http_server_start(int SERVER_MODE)
 			dinfo = MHD_get_daemon_info(httpdaemon, MHD_DAEMON_INFO_LISTEN_FD);
 		else if (SERVER_MODE == HTTPS_MODE)
 			dinfo = MHD_get_daemon_info(httpsdaemon, MHD_DAEMON_INFO_LISTEN_FD);
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 		else if (SERVER_MODE == H2_MODE)
 			dinfo = MHD_get_daemon_info(h2daemon, MHD_DAEMON_INFO_LISTEN_FD);
+#endif
 
 		if (!dinfo)
 			return 1;
@@ -699,8 +710,10 @@ static int _http_server_start(int SERVER_MODE)
 					http_server_port = port_num;
 				else if (SERVER_MODE == HTTPS_MODE)
 					https_server_port = port_num;
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 				else if (SERVER_MODE == H2_MODE)
 					h2_server_port = port_num;
+#endif
 			}
 		}
 	}
@@ -813,20 +826,26 @@ static char *_insert_ports(const char *src)
 	while (*src) {
 		if (*src == '{') {
 			if (!strncmp(src, "{{port}}", 8)) {
-				if (proto_pass == H2_PASS) {
-					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
-				} else {
+				if (proto_pass == HTTP_1_1_PASS) {
 					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", http_server_port);
 				}
+#ifdef HAVE_MICROHTTPD_HTTP2_H
+				else {
+					dst += snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+				}
+#endif
 				src += 8;
 				continue;
 			}
 			else if (!strncmp(src, "{{sslport}}", 11)) {
-				if (proto_pass == H2_PASS) {
-					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
-				} else {
+				if (proto_pass == HTTP_1_1_PASS) {
 					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", https_server_port);
 				}
+#ifdef HAVE_MICROHTTPD_HTTP2_H
+				else {
+					dst += snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+				}
+#endif
 				src += 11;
 				continue;
 			}
@@ -860,7 +879,9 @@ void wget_test_start_server(int first_key, ...)
 	bool start_http = 1;
 #ifdef WITH_TLS
 	bool start_https = 1;
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 	bool start_h2 = 1;
+#endif
 #endif
 
 	wget_global_init(
@@ -901,7 +922,9 @@ void wget_test_start_server(int first_key, ...)
 		case WGET_TEST_HTTP_ONLY:
 #ifdef WITH_TLS
 			start_https = 0;
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 			start_h2 = 0;
+#endif
 #endif
 			break;
 		case WGET_TEST_H2_ONLY:
@@ -934,7 +957,9 @@ void wget_test_start_server(int first_key, ...)
 #endif
 			break;
 		case WGET_TEST_SKIP_H2:
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 			start_h2 = 0;
+#endif
 			break;
 		default:
 			wget_error_printf(_("Unknown option %d\n"), key);
@@ -968,11 +993,13 @@ void wget_test_start_server(int first_key, ...)
 			wget_error_printf_exit(_("Failed to start HTTPS server, error %d\n"), rc);
 	}
 
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 	// start h2 server
 	if (start_h2) {
 		if ((rc = _http_server_start(H2_MODE)) != 0)
 			wget_error_printf_exit(_("Failed to start h2 server, error %d\n"), rc);
 	}
+#endif
 #endif
 }
 
@@ -1050,7 +1077,7 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 
 void wget_test(int first_key, ...)
 {
-#ifndef WITH_LIBNGHTTP2
+#if !defined WITH_LIBNGHTTP2 || !defined HAVE_MICROHTTPD_HTTP2_H
 	if(!httpdaemon && !httpsdaemon)
 		exit(WGET_TEST_EXIT_SKIP);
 #endif
@@ -1058,6 +1085,7 @@ void wget_test(int first_key, ...)
 	for (proto_pass = 0; proto_pass < END_PASS; proto_pass++) {
 		if (proto_pass == HTTP_1_1_PASS && !httpdaemon && !httpsdaemon)
 			continue;
+
 		if (proto_pass == H2_PASS) {
 #ifndef WITH_LIBNGHTTP2
 			continue;
@@ -1261,13 +1289,16 @@ void wget_test(int first_key, ...)
 				wget_buffer_printf_append(cmd, " \"%s\"", tmp ? tmp : request_url);
 				wget_xfree(tmp);
 			} else {
-				if(proto_pass == H2_PASS) {
-					wget_buffer_printf_append(cmd, " \"https://localhost:%d/%s\"",
-					h2_server_port, request_url);
-				} else {
+				if(proto_pass == HTTP_1_1_PASS) {
 					wget_buffer_printf_append(cmd, " \"http://localhost:%d/%s\"",
 					http_server_port, request_url);
 				}
+#ifdef HAVE_MICROHTTPD_HTTP2_H
+				else {
+					wget_buffer_printf_append(cmd, " \"https://localhost:%d/%s\"",
+					h2_server_port, request_url);
+				}
+#endif
 			}
 		}
 
@@ -1384,6 +1415,9 @@ int wget_test_get_https_server_port(void)
 
 int wget_test_get_h2_server_port(void)
 {
+#ifndef HAVE_MICROHTTPD_HTTP2_H
+	return -1;
+#endif
 	return h2_server_port;
 }
 
