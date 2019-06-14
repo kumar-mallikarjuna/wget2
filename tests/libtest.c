@@ -616,8 +616,8 @@ static int _http_server_start(int SERVER_MODE)
 				return 1;
 			}
 		}
-#ifdef HAVE_MICROHTTPD_HTTP2_H
 		else {
+#ifdef HAVE_MICROHTTPD_HTTP2_H
 			h2daemon = MHD_start_daemon(MHD_USE_HTTP2 | MHD_USE_SELECT_INTERNALLY | MHD_USE_TLS
 #if MHD_VERSION >= 0x00096302
 					| MHD_USE_POST_HANDSHAKE_AUTH_SUPPORT
@@ -631,15 +631,14 @@ static int _http_server_start(int SERVER_MODE)
 #endif
 				MHD_OPTION_CONNECTION_MEMORY_LIMIT, 1*1024*1024,    //Enough to send 1MB files through
 				MHD_OPTION_END);
+#endif
 
 			if (!h2daemon) {
 				wget_error_printf(_("Cannot start the h2 server.\n"));
+				wget_error_printf(_("HTTP/2 support for MHD not found.\n"));
 				return 1;
 			}
 		}
-#else
-		wget_debug_printf("h2 server failed to start. h2 support unavailable for MHD'");
-#endif
 	}
 
 	// get open random port number
@@ -1098,7 +1097,7 @@ void wget_test(int first_key, ...)
 		for (size_t i = 0; i < nurls; i++) {
 			wget_test_url_t *url = urls + i;
 			wget_test_url_t *url_original = urls_original + i;
-			if(url->body_alloc){
+			if (url->body_alloc) {
 				wget_xfree(url->body);
 				url->body_alloc = 0;
 			}
@@ -1111,7 +1110,7 @@ void wget_test(int first_key, ...)
 			}
 
 			for (unsigned it = 0; it < countof(url_original->headers) && url_original->headers[it]; it++) {
-				if(url->header_alloc[it]){
+				if (url->header_alloc[it]) {
 					wget_xfree(url->headers[it]);
 					url->header_alloc[it] = 0;
 				}
