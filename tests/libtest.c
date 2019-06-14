@@ -1417,8 +1417,9 @@ int wget_test_get_h2_server_port(void)
 {
 #ifndef HAVE_MICROHTTPD_HTTP2_H
 	return -1;
-#endif
+#else
 	return h2_server_port;
+#endif
 }
 
 // assume that we are in 'tmpdir'
