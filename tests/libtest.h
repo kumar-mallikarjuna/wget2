@@ -121,7 +121,11 @@ typedef struct {
 	const char *
 		body;
 	const char *
+		body_original;
+	const char *
 		headers[10];
+	const char *
+		headers_original[10];
 	const char *
 		request_headers[10];
 	const char *
@@ -142,11 +146,8 @@ typedef struct {
 		body_len; // The length of the body in bytes. 0 means use strlen(body)
 
 	bool
-		body_alloc : 1, // if body has been allocated internally (and need to be freed on exit)
 		https_only : 1,
 		http_only : 1;
-	bool
-		header_alloc[10]; // if header[n] has been allocated internally (and need to be freed on exit)
 } wget_test_url_t;
 
 WGETAPI void wget_test_stop_server(void);

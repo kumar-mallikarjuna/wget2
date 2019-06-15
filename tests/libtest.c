@@ -75,8 +75,7 @@ static int
 static wget_vector_t
 	*request_urls;
 static wget_test_url_t
-	*urls,
-	*urls_original;
+	*urls;
 static size_t
 	nurls;
 static char
@@ -787,18 +786,16 @@ void wget_test_stop_server(void)
 //	wget_vector_free(&response_headers);
 	wget_vector_free(&request_urls);
 
-	wget_xfree(urls_original);
-
 	for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
-		if (url->body_alloc) {
+		if (url->body_original) {
 			wget_xfree(url->body);
-			url->body_alloc = 0;
+			url->body_original = NULL;
 		}
 
 		for (size_t it = 0; it < countof(url->headers); it++) {
-			if (url->header_alloc[it]) {
+			if (url->headers_original[it]) {
 				wget_xfree(url->headers[it]);
-				url->header_alloc[it] = 0;
+				url->headers_original[it] = NULL;
 			}
 		}
 	}
@@ -906,8 +903,6 @@ void wget_test_start_server(int first_key, ...)
 */		case WGET_TEST_RESPONSE_URLS:
 			urls = va_arg(args, wget_test_url_t *);
 			nurls = va_arg(args, size_t);
-			urls_original = wget_malloc(sizeof(wget_test_url_t)*nurls);
-			memcpy(urls_original, urls, sizeof(wget_test_url_t)*nurls);
 			break;
 		case WGET_TEST_SERVER_SEND_CONTENT_LENGTH:
 			server_send_content_length = !!va_arg(args, int);
@@ -1094,32 +1089,20 @@ void wget_test(int first_key, ...)
 		}
 
 		// now replace {{port}} in the body by the actual server port
-		for (size_t i = 0; i < nurls; i++) {
-			wget_test_url_t *url = urls + i;
-			wget_test_url_t *url_original = urls_original + i;
-			if (url->body_alloc) {
-				wget_xfree(url->body);
-				url->body_alloc = 0;
-			}
-
-			char *p = _insert_ports(url_original->body);
+		for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
+			char *p = _insert_ports(url->body);
 
 			if (p) {
+				url->body_original = url->body;
 				url->body = p;
-				url->body_alloc = 1;
 			}
 
-			for (unsigned it = 0; it < countof(url_original->headers) && url_original->headers[it]; it++) {
-				if (url->header_alloc[it]) {
-					wget_xfree(url->headers[it]);
-					url->header_alloc[it] = 0;
-				}
-
-				p = _insert_ports(url_original->headers[it]);
+			for (unsigned it = 0; it < countof(url->headers) && url->headers[it]; it++) {
+				p = _insert_ports(url->headers[it]);
 
 				if (p) {
+					url->headers_original[it] = url->headers[it];
 					url->headers[it] = p;
-					url->header_alloc[it] = 1;
 				}
 			}
 		}
@@ -1233,11 +1216,8 @@ void wget_test(int first_key, ...)
 				}
 				else if ((fd = open(existing_files[it].name, O_CREAT|O_WRONLY|O_TRUNC|O_BINARY, 0644)) != -1) {
 					const char *existing_content = _insert_ports(existing_files[it].content);
-					bool existing_content_alloc = 0;
 					if (!existing_content)
 						existing_content = existing_files[it].content;
-					else
-						existing_content_alloc = 1;
 
 					ssize_t nbytes = write(fd, existing_content, strlen(existing_content));
 					close(fd);
@@ -1253,7 +1233,7 @@ void wget_test(int first_key, ...)
 								tmpdir, existing_files[it].name, options);
 					}
 
-					if(existing_content_alloc)
+					if (existing_content != existing_files[it].content)
 						wget_xfree(existing_content);
 
 				} else {
@@ -1367,7 +1347,7 @@ void wget_test(int first_key, ...)
 						if (content_length != (size_t) nbytes || memcmp(expected_content, content, nbytes) != 0)
 							wget_error_printf_exit(_("Unexpected content in %s [%s]\n"), fname, options);
 
-						if(expected_content_alloc)
+						if (expected_content_alloc)
 							wget_xfree(expected_content);
 					}
 
@@ -1399,6 +1379,23 @@ void wget_test(int first_key, ...)
 		server_send_content_length = server_send_content_length_old;
 
 		// system("ls -la");
+
+		// cleanup for next iteration
+		for (wget_test_url_t *url = urls; url < urls + nurls; url++) {
+			if (url->body_original) {
+				wget_xfree(url->body);
+				url->body = url->body_original;
+				url->body_original = NULL;
+			}
+
+			for (it = 0; it < countof(url->headers) && url->headers[it]; it++) {
+				if (url->headers_original[it]) {
+					wget_xfree(url->headers[it]);
+					url->headers[it] = url->headers_original[it];
+					url->headers_original[it] = NULL;
+				}
+			}
+		}
 	}
 }
 
