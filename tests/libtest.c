@@ -666,8 +666,6 @@ static int _http_server_start(int SERVER_MODE)
 #ifdef HAVE_MICROHTTPD_HTTP2_H
 		else if (SERVER_MODE == H2_MODE) {
 			h2_server_port = port_num;
-
-			printf("\nh2 server started at: %d\n", h2_server_port);
 		}
 #endif
 	}
@@ -827,7 +825,7 @@ static char *_insert_ports(const char *src)
 				}
 #ifdef HAVE_MICROHTTPD_HTTP2_H
 				else {
-					dst += snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
 				}
 #endif
 				src += 8;
@@ -839,7 +837,7 @@ static char *_insert_ports(const char *src)
 				}
 #ifdef HAVE_MICROHTTPD_HTTP2_H
 				else {
-					dst += snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
+					dst += wget_snprintf(dst, srclen - (dst - ret), "%d", h2_server_port);
 				}
 #endif
 				src += 11;
@@ -909,9 +907,6 @@ void wget_test_start_server(int first_key, ...)
 			break;
 		case WGET_TEST_HTTPS_ONLY:
 			start_http = 0;
-/*#ifdef WITH_GNUTLS
-			start_h2 = 0;
-#endif*/
 			break;
 		case WGET_TEST_HTTP_ONLY:
 #ifdef WITH_TLS
@@ -1072,7 +1067,7 @@ static void _scan_for_unexpected(const char *dirname, const wget_test_file_t *ex
 void wget_test(int first_key, ...)
 {
 #if !defined WITH_LIBNGHTTP2 || !defined HAVE_MICROHTTPD_HTTP2_H
-	if(!httpdaemon && !httpsdaemon)
+	if (!httpdaemon && !httpsdaemon)
 		exit(WGET_TEST_EXIT_SKIP);
 #endif
 
@@ -1084,7 +1079,7 @@ void wget_test(int first_key, ...)
 #ifndef WITH_LIBNGHTTP2
 			continue;
 #endif
-			if(!h2daemon)
+			if (!h2daemon)
 				continue;
 		}
 
@@ -1132,12 +1127,12 @@ void wget_test(int first_key, ...)
 			options_alloc = 0;
 
 #ifdef _WIN32
-		if(proto_pass == H2_PASS)
+		if (proto_pass == H2_PASS)
 			executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
 		else
 			executable = BUILDDIR "\\..\\src\\wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10";
 #else
-		if(proto_pass == H2_PASS)
+		if (proto_pass == H2_PASS)
 			executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10 --https-enforce=hard --ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --no-ocsp";
 		else
 			executable = BUILDDIR "/../src/wget2_noinstall" EXEEXT " -d --no-config --no-local-db --max-threads=1 --prefer-family=ipv4 --no-proxy --timeout 10";
@@ -1268,7 +1263,7 @@ void wget_test(int first_key, ...)
 				wget_buffer_printf_append(cmd, " \"%s\"", tmp ? tmp : request_url);
 				wget_xfree(tmp);
 			} else {
-				if(proto_pass == HTTP_1_1_PASS) {
+				if (proto_pass == HTTP_1_1_PASS) {
 					wget_buffer_printf_append(cmd, " \"http://localhost:%d/%s\"",
 					http_server_port, request_url);
 				}
@@ -1299,9 +1294,9 @@ void wget_test(int first_key, ...)
 			rc = pclose(pp);
 		} else
 			wget_error_printf_exit(_("Failed to execute test (%d) [%s]\n"), errno, options);
-	/*
-		rc = system(cmd->data);
-	*/
+		/*
+			rc = system(cmd->data);
+		*/
 		if (!WIFEXITED(rc)) {
 			wget_error_printf_exit(_("Unexpected error code %d, expected %d [%s]\n"), rc, expected_error_code, options);
 		}
