@@ -169,7 +169,7 @@ static int _print_header_range(
 {
 	wget_buffer_t *header_range = cls;
 
-	if (!strcmp(key, MHD_HTTP_HEADER_RANGE)) {
+	if (!strcasecmp(key, MHD_HTTP_HEADER_RANGE)) {
 		wget_buffer_strcpy(header_range, key);
 		if (value) {
 			wget_buffer_strcat(header_range, value);
