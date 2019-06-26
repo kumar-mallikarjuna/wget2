@@ -828,6 +828,8 @@ static int cert_verify_ocsp(gnutls_x509_crt_t cert, gnutls_x509_crt_t issuer)
 		return -1;
 	}
 
+	debug_printf("--- Calling send_ocsp_request() ---");
+
 	if (send_ocsp_request(_config.ocsp_server, cert, issuer, &resp, &nonce) < 0) {
 		debug_printf("Cannot contact OCSP server\n");
 		return -1;

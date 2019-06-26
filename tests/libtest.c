@@ -67,6 +67,7 @@
 static int
 	http_server_port,
 	https_server_port,
+	ocsp_server_port,
 	keep_tmpfiles,
 	reject_https_connection;
 static wget_vector_t
@@ -91,7 +92,8 @@ enum CHECK_POST_HANDSHAKE_AUTH {
 // MHD_Daemon instance
 static struct MHD_Daemon
 	*httpdaemon,
-	*httpsdaemon;
+	*httpsdaemon,
+	*ocspdaemon;
 
 // for passing URL query string
 struct query_string {
@@ -107,7 +109,8 @@ static char
 
 enum SERVER_MODE {
 	HTTP_MODE,
-	HTTPS_MODE
+	HTTPS_MODE,
+	OCSP_MODE
 };
 
 static char *_scan_directory(const char* data)
@@ -207,6 +210,20 @@ static ssize_t _callback (void *cls, uint64_t pos, char *buf, size_t buf_size)
 static void _free_callback_param(void *cls)
 {
 	wget_free(cls);
+}
+
+static int ocsp_ahc(
+	void *cls G_GNUC_WGET_UNUSED,
+	struct MHD_Connection *connection G_GNUC_WGET_UNUSED,
+	const char *url G_GNUC_WGET_UNUSED,
+	const char *method G_GNUC_WGET_UNUSED,
+	const char *version G_GNUC_WGET_UNUSED,
+	const char *upload_data G_GNUC_WGET_UNUSED,
+	size_t *upload_data_size G_GNUC_WGET_UNUSED,
+	void **con_cls G_GNUC_WGET_UNUSED)
+{
+	wget_debug_printf("In OCSP Access Handler Callback.\n");
+	return 0;
 }
 
 static int _answer_to_connection(
@@ -540,6 +557,7 @@ static void _http_server_stop(void)
 {
 	MHD_stop_daemon(httpdaemon);
 	MHD_stop_daemon(httpsdaemon);
+	MHD_stop_daemon(ocspdaemon);
 
 	wget_xfree(key_pem);
 	wget_xfree(cert_pem);
@@ -600,7 +618,22 @@ static int _http_server_start(int SERVER_MODE)
 			wget_error_printf(_("Cannot start the HTTPS server.\n"));
 			return 1;
 		}
+	} else if (SERVER_MODE == OCSP_MODE) {
+		static char rnd[8] = "realrnd"; // fixed 'random' value
+
+		ocspdaemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY,
+			port_num, NULL, NULL, &ocsp_ahc, NULL,
+			MHD_OPTION_DIGEST_AUTH_RANDOM, sizeof(rnd), rnd,
+			MHD_OPTION_NONCE_NC_SIZE, 300,
+#ifdef MHD_OPTION_STRICT_FOR_CLIENT
+			MHD_OPTION_STRICT_FOR_CLIENT, 1,
+#endif
+			MHD_OPTION_END);
+
+		if (!ocspdaemon)
+			return 1;
 	}
+
 
 	// get open random port number
 	if (0) {}
@@ -612,6 +645,8 @@ static int _http_server_start(int SERVER_MODE)
 			dinfo = MHD_get_daemon_info(httpdaemon, MHD_DAEMON_INFO_BIND_PORT);
 		else if (SERVER_MODE == HTTPS_MODE)
 			dinfo = MHD_get_daemon_info(httpsdaemon, MHD_DAEMON_INFO_BIND_PORT);
+		else if (SERVER_MODE == OCSP_MODE)
+			dinfo = MHD_get_daemon_info(ocspdaemon, MHD_DAEMON_INFO_BIND_PORT);
 
 		if (!dinfo || dinfo->port == 0)
 			return 1;
@@ -621,6 +656,8 @@ static int _http_server_start(int SERVER_MODE)
 			http_server_port = port_num;
 		else if (SERVER_MODE == HTTPS_MODE)
 			https_server_port = port_num;
+		else if (SERVER_MODE == OCSP_MODE)
+			ocsp_server_port = port_num;
 	}
 #endif /* MHD_VERSION >= 0x00095501 */
 	else
@@ -632,6 +669,8 @@ static int _http_server_start(int SERVER_MODE)
 			dinfo = MHD_get_daemon_info(httpdaemon, MHD_DAEMON_INFO_LISTEN_FD);
 		else if (SERVER_MODE == HTTPS_MODE)
 			dinfo = MHD_get_daemon_info(httpsdaemon, MHD_DAEMON_INFO_LISTEN_FD);
+		else if (SERVER_MODE == OCSP_MODE)
+			dinfo = MHD_get_daemon_info(ocspdaemon, MHD_DAEMON_INFO_LISTEN_FD);
 
 		if (!dinfo)
 			return 1;
@@ -655,6 +694,9 @@ static int _http_server_start(int SERVER_MODE)
 					http_server_port = port_num;
 				else if (SERVER_MODE == HTTPS_MODE)
 					https_server_port = port_num;
+				else if (SERVER_MODE == OCSP_MODE)
+					ocsp_server_port = port_num;
+
 			}
 		}
 	}
@@ -755,7 +797,7 @@ void wget_test_stop_server(void)
 
 static char *_insert_ports(const char *src)
 {
-	if (!src || (!strstr(src, "{{port}}") && !strstr(src, "{{sslport}}")))
+	if (!src || (!strstr(src, "{{port}}")  && !strstr(src, "{{sslport}}") && !strstr(src, "{{ocspport}}")))
 		return NULL;
 
 	size_t srclen = strlen(src) + 1;
@@ -772,6 +814,11 @@ static char *_insert_ports(const char *src)
 			else if (!strncmp(src, "{{sslport}}", 11)) {
 				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", https_server_port);
 				src += 11;
+				continue;
+			}
+			else if (!strncmp(src, "{{ocspport}}", 12)) {
+				dst += wget_snprintf(dst, srclen - (dst - ret), "%d", ocsp_server_port);
+				src += 12;
 				continue;
 			}
 		}
@@ -804,6 +851,7 @@ void wget_test_start_server(int first_key, ...)
 	bool start_http = 1;
 #ifdef WITH_TLS
 	bool start_https = 1;
+	bool start_ocsp = 0;
 #endif
 
 	wget_global_init(
@@ -864,6 +912,14 @@ void wget_test_start_server(int first_key, ...)
 			exit(WGET_TEST_EXIT_SKIP);
 #endif
 			break;
+		case WGET_TEST_FEATURE_OCSP:
+#if !defined WITH_TLS
+			wget_error_printf(_("Test requires TLS. Skipping\n"));
+			exit(WGET_TEST_EXIT_SKIP);
+#else
+			start_ocsp = 1;
+#endif
+			break;
 		default:
 			wget_error_printf(_("Unknown option %d\n"), key);
 		}
@@ -894,6 +950,11 @@ void wget_test_start_server(int first_key, ...)
 	if (start_https) {
 		if ((rc = _http_server_start(HTTPS_MODE)) != 0)
 			wget_error_printf_exit(_("Failed to start HTTPS server, error %d\n"), rc);
+	}
+	// start OCSP server
+	if (start_ocsp) {
+		if ((rc = _http_server_start(OCSP_MODE)) != 0)
+			wget_error_printf_exit(_("Failed to start OCSP server, error %d\n"), rc);
 	}
 #endif
 
@@ -1238,6 +1299,11 @@ int wget_test_get_http_server_port(void)
 int wget_test_get_https_server_port(void)
 {
 	return https_server_port;
+}
+
+int wget_test_get_ocsp_server_port(void)
+{
+	return ocsp_server_port;
 }
 
 // assume that we are in 'tmpdir'
