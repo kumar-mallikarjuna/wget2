@@ -41,7 +41,7 @@ int main(void)
 		0);
 
 	wget_test(
-		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/x509-ca-cert.pem --ocsp --no-ocsp-stapling --ocsp-server localhost:{{ocspport}}",
+		WGET_TEST_OPTIONS, "--ca-directory=" SRCDIR "/certs/ocsp/ --ocsp --ocsp-server http://localhost:{{ocspport}}",
 		WGET_TEST_REQUEST_URL, "https://localhost:{{sslport}}/index.html",
 		WGET_TEST_EXPECTED_ERROR_CODE, 0,
 		WGET_TEST_EXPECTED_FILES, &(wget_test_file_t []){

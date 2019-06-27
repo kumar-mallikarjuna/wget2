@@ -828,7 +828,7 @@ static int cert_verify_ocsp(gnutls_x509_crt_t cert, gnutls_x509_crt_t issuer)
 		return -1;
 	}
 
-	debug_printf("--- Calling send_ocsp_request() ---");
+	printf("--- Calling send_ocsp_request() ---\n");
 
 	if (send_ocsp_request(_config.ocsp_server, cert, issuer, &resp, &nonce) < 0) {
 		debug_printf("Cannot contact OCSP server\n");
@@ -1086,6 +1086,8 @@ static int _verify_certificate_callback(gnutls_session_t session)
 		_cert_verify_hpkp(cert, hostname, session);
 
 #ifdef HAVE_GNUTLS_OCSP_H
+		printf("\n_config.ocsp: %d, it:  %d, nvalid: %d\n", _config.ocsp , it, nvalid);
+
 		if (_config.ocsp && it > nvalid) {
 			char fingerprint[64 * 2 +1];
 			int revoked;

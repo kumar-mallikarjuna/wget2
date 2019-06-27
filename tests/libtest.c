@@ -592,8 +592,13 @@ static int _http_server_start(int SERVER_MODE)
 	} else if (SERVER_MODE == HTTPS_MODE) {
 		size_t size;
 
-		key_pem = wget_read_file(SRCDIR "/certs/x509-server-key.pem", &size);
-		cert_pem = wget_read_file(SRCDIR "/certs/x509-server-cert.pem", &size);
+		if (!ocspdaemon) {
+			key_pem = wget_read_file(SRCDIR "/certs/x509-server-key.pem", &size);
+			cert_pem = wget_read_file(SRCDIR "/certs/x509-server-cert.pem", &size);
+		} else {
+			key_pem = wget_read_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &size);
+			cert_pem = wget_read_file(SRCDIR "/certs/ocsp/x509-server-cert.pem", &size);
+		}
 
 		if ((key_pem == NULL) || (cert_pem == NULL))
 		{
@@ -946,15 +951,16 @@ void wget_test_start_server(int first_key, ...)
 	}
 
 #ifdef WITH_TLS
-	// start HTTPS server
-	if (start_https) {
-		if ((rc = _http_server_start(HTTPS_MODE)) != 0)
-			wget_error_printf_exit(_("Failed to start HTTPS server, error %d\n"), rc);
-	}
 	// start OCSP server
 	if (start_ocsp) {
 		if ((rc = _http_server_start(OCSP_MODE)) != 0)
 			wget_error_printf_exit(_("Failed to start OCSP server, error %d\n"), rc);
+	}
+
+	// start HTTPS server
+	if (start_https) {
+		if ((rc = _http_server_start(HTTPS_MODE)) != 0)
+			wget_error_printf_exit(_("Failed to start HTTPS server, error %d\n"), rc);
 	}
 #endif
 
