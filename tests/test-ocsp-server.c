@@ -40,8 +40,10 @@ int main(void)
 		WGET_TEST_FEATURE_OCSP,
 		0);
 
+	// OPTIONS are not default ON DISCUSS THIS!
+
 	wget_test(
-		WGET_TEST_OPTIONS, "--ca-directory=" SRCDIR "/certs/ocsp/ --ocsp --ocsp-server http://localhost:{{ocspport}}",
+		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --ocsp --ocsp-server http://localhost:{{ocspport}}",
 		WGET_TEST_REQUEST_URL, "https://localhost:{{sslport}}/index.html",
 		WGET_TEST_EXPECTED_ERROR_CODE, 0,
 		WGET_TEST_EXPECTED_FILES, &(wget_test_file_t []){
