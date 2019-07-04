@@ -244,7 +244,7 @@ static int _ocsp_ahc(
 		return MHD_YES;
 	} else if (!first && upload_data == NULL) {
 		size_t size;
-		char *data = wget_malloc(sizeof(gnutls_datum_t));
+		char *data;
 
 		data = wget_read_file(SRCDIR "/certs/ocsp/resp.der", &size);
 
@@ -253,6 +253,7 @@ static int _ocsp_ahc(
 		int ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
 
 		MHD_destroy_response (response);
+		wget_xfree(data);
 
 /*
 		gnutls_datum_t body, out;
