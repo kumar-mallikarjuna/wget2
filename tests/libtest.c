@@ -103,9 +103,8 @@ static struct MHD_Daemon
 	*ocspdaemon;
 
 #ifdef HAVE_GNUTLS_OCSP_H
-// Should be dynamically allocated
-static gnutls_pcert_st pcrt, pcrt_interm;
-static gnutls_privkey_t privkey;
+static gnutls_pcert_st *pcrt;
+static gnutls_privkey_t *privkey;
 
 enum OCSP_TEST_MODE {
 	OCSP_CERT_VALID,
@@ -313,25 +312,28 @@ static int _ocsp_cert_callback(
 {
 	gnutls_datum_t data;
 
+	pcrt = wget_malloc(sizeof(gnutls_pcert_st)*2);
+	privkey = wget_malloc(sizeof(gnutls_privkey_t));
+
 	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-cert.pem", &data);
-	gnutls_pcert_import_x509_raw(&pcrt, &data, GNUTLS_X509_FMT_PEM, 0);
+	gnutls_pcert_import_x509_raw(pcrt, &data, GNUTLS_X509_FMT_PEM, 0);
 
 	gnutls_free(data.data);
 
 	gnutls_load_file(SRCDIR "/certs/ocsp/x509-interm-cert.pem", &data);
-	gnutls_pcert_import_x509_raw(&pcrt_interm, &data, GNUTLS_X509_FMT_PEM, 0);
+	gnutls_pcert_import_x509_raw(pcrt+1, &data, GNUTLS_X509_FMT_PEM, 0);
 
 	gnutls_free(data.data);
 
 	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &data);
-	gnutls_privkey_init(&privkey);
-	gnutls_privkey_import_x509_raw(privkey, &data, GNUTLS_X509_FMT_PEM, NULL, 0);
+	gnutls_privkey_init(privkey);
+	gnutls_privkey_import_x509_raw(*privkey, &data, GNUTLS_X509_FMT_PEM, NULL, 0);
 
 	gnutls_free(data.data);
 
-	*pcert = &pcrt;
-	*(pcert+1) = &pcrt_interm;
-	*pkey = privkey;
+	*pcert = pcrt;
+	*(pcert+1) = pcrt+1;
+	*pkey = *privkey;
 	*pcert_length = 2;
 
 	return 0;
@@ -676,6 +678,8 @@ static void _http_server_stop(void)
 
 #ifdef HAVE_GNUTLS_OCSP_H
 	wget_xfree(ocsp_test_mode);
+	wget_xfree(pcrt);
+	wget_xfree(privkey);
 #endif
 }
 
