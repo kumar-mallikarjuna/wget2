@@ -102,9 +102,11 @@ static struct MHD_Daemon
 	*httpsdaemon,
 	*ocspdaemon;
 
+#ifdef HAVE_GNUTLS_OCSP_H
 // Should be dynamically allocated
 static gnutls_pcert_st pcrt, pcrt_interm;
 static gnutls_privkey_t privkey;
+#endif
 
 // for passing URL query string
 struct query_string {
