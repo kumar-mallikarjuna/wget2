@@ -40,15 +40,23 @@ int main(void)
 		WGET_TEST_FEATURE_OCSP,
 		0);
 
-	// OPTIONS are not default ON DISCUSS THIS!
-
+	// Test ocsp with 'verified' response
 	wget_test(
-		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --ocsp --ocsp-server http://localhost:{{ocspport}}",
+		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --no-ocsp-file --ocsp --ocsp-server http://localhost:{{ocspport}}",
 		WGET_TEST_REQUEST_URL, "https://localhost:{{sslport}}/index.html",
 		WGET_TEST_EXPECTED_ERROR_CODE, 0,
+		WGET_TEST_OCSP_MODE, 0,
 		WGET_TEST_EXPECTED_FILES, &(wget_test_file_t []){
 			{urls[0].name + 1, urls[0].body},
 			{	NULL} },
+		0);
+
+	// Test ocsp with 'revoked' response
+	wget_test(
+		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --no-ocsp-file --ocsp --ocsp-server http://localhost:{{ocspport}}",
+		WGET_TEST_REQUEST_URL, "https://localhost:{{sslport}}/index.html",
+		WGET_TEST_EXPECTED_ERROR_CODE, 5,
+		WGET_TEST_OCSP_MODE, 1,
 		0);
 
 	exit(0);

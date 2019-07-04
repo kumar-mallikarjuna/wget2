@@ -106,6 +106,11 @@ static struct MHD_Daemon
 // Should be dynamically allocated
 static gnutls_pcert_st pcrt, pcrt_interm;
 static gnutls_privkey_t privkey;
+
+enum OCSP_TEST_MODE {
+	OCSP_CERT_VALID,
+	OCSP_CERT_REVOKED
+} *ocsp_test_mode;
 #endif
 
 // for passing URL query string
@@ -246,14 +251,11 @@ static int _ocsp_ahc(
 		size_t size;
 		char *data;
 
-		data = wget_read_file(SRCDIR "/certs/ocsp/resp.der", &size);
-
-		struct MHD_Response *response = MHD_create_response_from_buffer (size, data, MHD_RESPMEM_MUST_COPY);
-
-		int ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
-
-		MHD_destroy_response (response);
-		wget_xfree(data);
+		if (*ocsp_test_mode == OCSP_CERT_VALID) {
+			data = wget_read_file(SRCDIR "/certs/ocsp/resp.der", &size);
+		} else if (*ocsp_test_mode == OCSP_CERT_REVOKED) {
+			data = wget_read_file(SRCDIR "/certs/ocsp/resp2.der", &size);
+		}
 
 /*
 		gnutls_datum_t body, out;
@@ -267,6 +269,13 @@ static int _ocsp_ahc(
 
 		printf("Response: \t%s\n", out.data);
 */
+
+		struct MHD_Response *response = MHD_create_response_from_buffer (size, data, MHD_RESPMEM_MUST_COPY);
+
+		int ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
+
+		MHD_destroy_response (response);
+		wget_xfree(data);
 
 		return ret;
 	}
@@ -664,6 +673,10 @@ static void _http_server_stop(void)
 
 	wget_xfree(key_pem);
 	wget_xfree(cert_pem);
+
+#ifdef HAVE_GNUTLS_OCSP_H
+	wget_xfree(ocsp_test_mode);
+#endif
 }
 
 static int _check_to_accept(
@@ -754,6 +767,8 @@ static int _http_server_start(int SERVER_MODE)
 #endif
 			MHD_OPTION_CONNECTION_MEMORY_LIMIT, 1*1024*1024,
 			MHD_OPTION_END);
+
+		ocsp_test_mode = wget_malloc(sizeof(enum OCSP_TEST_MODE));
 #endif
 
 		if (!ocspdaemon)
@@ -1268,6 +1283,11 @@ void wget_test(int first_key, ...)
 				post_handshake_auth = wget_malloc(sizeof(enum CHECK_POST_HANDSHAKE_AUTH));
 #endif
 			}
+			break;
+		case WGET_TEST_OCSP_MODE:
+#ifdef HAVE_GNUTLS_OCSP_H
+			*ocsp_test_mode = va_arg(args, int);
+#endif
 			break;
 		default:
 			wget_error_printf_exit(_("Unknown option %d [%s]\n"), key, options);
