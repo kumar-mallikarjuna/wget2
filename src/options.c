@@ -1807,6 +1807,12 @@ static const struct optionw options[] = {
 		  "(default: ~/.wget-ocsp)\n"
 		}
 	},
+	{ "ocsp-nonce", &config.ocsp_nonce, parse_bool, -1, 0,
+		SECTION_SSL,
+		{ "Allow nonce checking when verifying OCSP\n",
+		  "response. (default: on)\n"
+		}
+	},
 	{ "ocsp-server", &config.ocsp_server, parse_string, 1, 0,
 		SECTION_SSL,
 		{ "Set OCSP server address.\n",
@@ -3528,6 +3534,7 @@ int init(int argc, const char **argv)
 	wget_ssl_set_config_int(WGET_SSL_KEY_TYPE, config.private_key_type);
 	wget_ssl_set_config_int(WGET_SSL_PRINT_INFO, config.debug);
 	wget_ssl_set_config_int(WGET_SSL_OCSP, config.ocsp);
+	wget_ssl_set_config_int(WGET_SSL_OCSP_NONCE, config.ocsp_nonce);
 	wget_ssl_set_config_int(WGET_SSL_OCSP_STAPLING, config.ocsp_stapling);
 	wget_ssl_set_config_string(WGET_SSL_OCSP_SERVER, config.ocsp_server);
 	wget_ssl_set_config_string(WGET_SSL_SECURE_PROTOCOL, config.secure_protocol);
