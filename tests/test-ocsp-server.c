@@ -42,7 +42,7 @@ int main(void)
 
 	// Test ocsp with 'verified' response
 	wget_test(
-		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --no-ocsp-file --ocsp --ocsp-server http://localhost:{{ocspport}}",
+		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --no-ocsp-file --no-ocsp-date --no-ocsp-nonce --ocsp --ocsp-server http://localhost:{{ocspport}}",
 		WGET_TEST_REQUEST_URL, "https://localhost:{{sslport}}/index.html",
 		WGET_TEST_EXPECTED_ERROR_CODE, 0,
 		WGET_TEST_OCSP_MODE, 0,
@@ -53,7 +53,7 @@ int main(void)
 
 	// Test ocsp with 'revoked' response
 	wget_test(
-		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --no-ocsp-file --ocsp --ocsp-server http://localhost:{{ocspport}}",
+		WGET_TEST_OPTIONS, "--ca-certificate=" SRCDIR "/certs/ocsp/x509-ca-cert.pem --no-ocsp-file --no-ocsp-date --no-ocsp-nonce --ocsp --ocsp-server http://localhost:{{ocspport}}",
 		WGET_TEST_REQUEST_URL, "https://localhost:{{sslport}}/index.html",
 		WGET_TEST_EXPECTED_ERROR_CODE, 5,
 		WGET_TEST_OCSP_MODE, 1,
