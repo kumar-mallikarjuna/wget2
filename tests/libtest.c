@@ -106,7 +106,7 @@ static struct MHD_Daemon
 static gnutls_pcert_st *pcrt;
 static gnutls_privkey_t *privkey;
 
-enum OCSP_TEST_MODE {
+static enum OCSP_TEST_MODE {
 	OCSP_CERT_VALID,
 	OCSP_CERT_REVOKED
 } *ocsp_test_mode;
@@ -247,8 +247,8 @@ static int _ocsp_ahc(
 
 		return MHD_YES;
 	} else if (!first && upload_data == NULL) {
-		size_t size;
-		char *data;
+		size_t size = 0;
+		char *data = NULL;
 
 		if (*ocsp_test_mode == OCSP_CERT_VALID) {
 			data = wget_read_file(SRCDIR "/certs/ocsp/resp.der", &size);
@@ -269,12 +269,17 @@ static int _ocsp_ahc(
 		printf("Response: \t%s\n", out.data);
 */
 
-		struct MHD_Response *response = MHD_create_response_from_buffer (size, data, MHD_RESPMEM_MUST_COPY);
+		int ret = 0;
 
-		int ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
+		if (data) {
+			struct MHD_Response *response = MHD_create_response_from_buffer (size, data, MHD_RESPMEM_MUST_COPY);
 
-		MHD_destroy_response (response);
-		wget_xfree(data);
+			ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
+
+			MHD_destroy_response (response);
+
+			wget_xfree(data);
+		}
 
 		return ret;
 	}
