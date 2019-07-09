@@ -106,10 +106,8 @@ static struct MHD_Daemon
 static gnutls_pcert_st *pcrt;
 static gnutls_privkey_t *privkey;
 
-static enum OCSP_TEST_MODE {
-	OCSP_CERT_VALID,
-	OCSP_CERT_REVOKED
-} *ocsp_test_mode;
+static const char
+	*ocsp_resp_file;
 #endif
 
 // for passing URL query string
@@ -250,10 +248,11 @@ static int _ocsp_ahc(
 		size_t size = 0;
 		char *data = NULL;
 
-		if (*ocsp_test_mode == OCSP_CERT_VALID) {
-			data = wget_read_file(SRCDIR "/certs/ocsp/resp.der", &size);
-		} else if (*ocsp_test_mode == OCSP_CERT_REVOKED) {
-			data = wget_read_file(SRCDIR "/certs/ocsp/resp2.der", &size);
+		if(ocsp_resp_file)
+			data = wget_read_file(ocsp_resp_file, &size);
+		else {
+			wget_error_printf(_("Need value for option WGET_TEST_OCSP_RESP_FILE.\n"));
+			exit(WGET_TEST_EXIT_SKIP);
 		}
 
 /*
@@ -682,7 +681,6 @@ static void _http_server_stop(void)
 	wget_xfree(cert_pem);
 
 #ifdef HAVE_GNUTLS_OCSP_H
-	wget_xfree(ocsp_test_mode);
 	wget_xfree(pcrt);
 	wget_xfree(privkey);
 #endif
@@ -776,8 +774,6 @@ static int _http_server_start(int SERVER_MODE)
 #endif
 			MHD_OPTION_CONNECTION_MEMORY_LIMIT, 1*1024*1024,
 			MHD_OPTION_END);
-
-		ocsp_test_mode = wget_malloc(sizeof(enum OCSP_TEST_MODE));
 #endif
 
 		if (!ocspdaemon)
@@ -1293,9 +1289,9 @@ void wget_test(int first_key, ...)
 #endif
 			}
 			break;
-		case WGET_TEST_OCSP_MODE:
+		case WGET_TEST_OCSP_RESP_FILE:
 #ifdef HAVE_GNUTLS_OCSP_H
-			*ocsp_test_mode = va_arg(args, int);
+			ocsp_resp_file = va_arg(args, const char *);
 #endif
 			break;
 		default:

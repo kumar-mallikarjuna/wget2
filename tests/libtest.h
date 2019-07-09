@@ -82,7 +82,7 @@ extern "C" {
 #define WGET_TEST_POST_HANDSHAKE_AUTH 3002
 
 // for ocsp testing
-#define WGET_TEST_OCSP_MODE 3003
+#define WGET_TEST_OCSP_RESP_FILE 3003
 
 #define countof(a) (sizeof(a)/sizeof(*(a)))
 
