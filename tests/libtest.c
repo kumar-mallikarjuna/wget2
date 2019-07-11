@@ -103,7 +103,7 @@ static struct MHD_Daemon
 	*ocspdaemon;
 
 #ifdef HAVE_GNUTLS_OCSP_H
-static gnutls_pcert_st *pcrt;
+static gnutls_pcert_st pcrt[2];
 static gnutls_privkey_t *privkey;
 
 static const char
@@ -303,7 +303,6 @@ static int _ocsp_ahc(
 	return MHD_YES;
 }
 
-
 static int _ocsp_cert_callback(
 	gnutls_session_t session G_GNUC_WGET_UNUSED,
 	const gnutls_datum_t* req_ca_dn G_GNUC_WGET_UNUSED,
@@ -314,27 +313,6 @@ static int _ocsp_cert_callback(
 	unsigned int *pcert_length,
 	gnutls_privkey_t *pkey)
 {
-	gnutls_datum_t data;
-
-	pcrt = wget_malloc(sizeof(gnutls_pcert_st)*2);
-	privkey = wget_malloc(sizeof(gnutls_privkey_t));
-
-	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-cert.pem", &data);
-	gnutls_pcert_import_x509_raw(pcrt, &data, GNUTLS_X509_FMT_PEM, 0);
-
-	gnutls_free(data.data);
-
-	gnutls_load_file(SRCDIR "/certs/ocsp/x509-interm-cert.pem", &data);
-	gnutls_pcert_import_x509_raw(pcrt+1, &data, GNUTLS_X509_FMT_PEM, 0);
-
-	gnutls_free(data.data);
-
-	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &data);
-	gnutls_privkey_init(privkey);
-	gnutls_privkey_import_x509_raw(*privkey, &data, GNUTLS_X509_FMT_PEM, NULL, 0);
-
-	gnutls_free(data.data);
-
 	*pcert = pcrt;
 	*(pcert+1) = pcrt+1;
 	*pkey = *privkey;
@@ -681,8 +659,8 @@ static void _http_server_stop(void)
 	wget_xfree(cert_pem);
 
 #ifdef HAVE_GNUTLS_OCSP_H
-	wget_xfree(pcrt);
-	wget_xfree(privkey);
+	gnutls_global_deinit();
+//	wget_xfree(pcrt);
 #endif
 }
 
@@ -754,6 +732,27 @@ static int _http_server_start(int SERVER_MODE)
 #endif
 				MHD_OPTION_CONNECTION_MEMORY_LIMIT, 1*1024*1024,
 				MHD_OPTION_END);
+
+			gnutls_datum_t data;
+
+			privkey = wget_malloc(sizeof(gnutls_privkey_t));
+			gnutls_privkey_init(privkey);
+			gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &data);
+			gnutls_privkey_import_x509_raw(*privkey, &data, GNUTLS_X509_FMT_PEM, NULL, 0);
+
+			gnutls_free(data.data);
+
+//			pcrt = wget_malloc(sizeof(gnutls_pcert_st)*2);
+
+			gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-cert.pem", &data);
+			gnutls_pcert_import_x509_raw(pcrt, &data, GNUTLS_X509_FMT_PEM, 0);
+
+			gnutls_free(data.data);
+
+			gnutls_load_file(SRCDIR "/certs/ocsp/x509-interm-cert.pem", &data);
+			gnutls_pcert_import_x509_raw(pcrt+1, &data, GNUTLS_X509_FMT_PEM, 0);
+
+			gnutls_free(data.data);
 		}
 #endif
 
