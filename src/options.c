@@ -3654,6 +3654,7 @@ void deinit(void)
 	xfree(config.logfile_append);
 	xfree(config.netrc_file);
 	xfree(config.ocsp_file);
+	xfree(config.ocsp_server);
 	xfree(config.output_document);
 	xfree(config.password);
 	xfree(config.post_data);
