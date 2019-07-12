@@ -103,7 +103,7 @@ static struct MHD_Daemon
 	*ocspdaemon;
 
 #ifdef HAVE_GNUTLS_OCSP_H
-static gnutls_pcert_st pcrt[2];
+static gnutls_pcert_st *pcrt;
 static gnutls_privkey_t *privkey;
 
 static const char
@@ -660,7 +660,6 @@ static void _http_server_stop(void)
 
 #ifdef HAVE_GNUTLS_OCSP_H
 	gnutls_global_deinit();
-//	wget_xfree(pcrt);
 #endif
 }
 
@@ -740,7 +739,7 @@ static int _http_server_start(int SERVER_MODE)
 
 			gnutls_free(data.data);
 
-//			pcrt = wget_malloc(sizeof(gnutls_pcert_st)*2);
+			pcrt = wget_malloc(sizeof(gnutls_pcert_st)*2);
 
 			gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-cert.pem", &data);
 			gnutls_pcert_import_x509_raw(pcrt, &data, GNUTLS_X509_FMT_PEM, 0);
