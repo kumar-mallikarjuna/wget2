@@ -718,8 +718,6 @@ static int _http_server_start(int SERVER_MODE)
 		}
 #ifdef HAVE_GNUTLS_OCSP_H
 		else {
-			key_pem = wget_read_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &size);
-			cert_pem = wget_read_file(SRCDIR "/certs/ocsp/x509-chain-cert.pem", &size);
 			httpsdaemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY | MHD_USE_TLS
 #if MHD_VERSION >= 0x00096302
 					| MHD_USE_POST_HANDSHAKE_AUTH_SUPPORT
