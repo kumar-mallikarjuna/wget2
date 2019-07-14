@@ -104,7 +104,11 @@ static struct MHD_Daemon
 
 #ifdef HAVE_GNUTLS_OCSP_H
 static gnutls_pcert_st *pcrt;
+static gnutls_pcert_st *pcrt_stap;
 static gnutls_privkey_t *privkey;
+static gnutls_privkey_t privkey_stap;
+
+static gnutls_datum_t *ocsp_resp;
 
 static const char
 	*ocsp_resp_file;
@@ -320,6 +324,57 @@ static int _ocsp_cert_callback(
 
 	return 0;
 }
+
+static int _ocsp_stap_cert_callback(
+	gnutls_session_t session G_GNUC_WGET_UNUSED,
+	const struct gnutls_cert_retr_st *info G_GNUC_WGET_UNUSED,
+	gnutls_pcert_st **pcert,
+	unsigned int *pcert_length,
+	gnutls_datum_t **ocsp,
+	unsigned int *ocsp_length,
+	gnutls_privkey_t *pkey,
+	unsigned int *flags G_GNUC_WGET_UNUSED)
+{
+	gnutls_datum_t data;
+
+	pcrt_stap = wget_malloc(sizeof(gnutls_pcert_st));
+	ocsp_resp = wget_malloc(sizeof(gnutls_datum_t));
+
+	gnutls_privkey_init(&privkey_stap);
+	gnutls_load_file(SRCDIR "/certs/ocsp/x509-serv-key.pem", &data);
+	gnutls_privkey_import_x509_raw(privkey_stap, &data, GNUTLS_X509_FMT_PEM, NULL, 0);
+	gnutls_free(data.data);
+
+	gnutls_load_file(SRCDIR "/certs/ocsp/x509-serv-cert.pem", &data);
+	gnutls_pcert_import_x509_raw(pcrt_stap, &data, GNUTLS_X509_FMT_PEM, 0);
+	gnutls_free(data.data);
+
+//	gnutls_load_file(SRCDIR "/certs/ocsp/x509-interm-cert.pem", &data);
+//	gnutls_pcert_import_x509_raw(pcrt_+1, &data, GNUTLS_X509_FMT_PEM, 0);
+//	gnutls_free(data.data);
+
+	gnutls_load_file(SRCDIR "/certs/ocsp/ocsp_stapled_resp.der", ocsp_resp);
+//	gnutls_load_file(SRCDIR "/certs/ocsp/ocsp_stapled_resp1.der", &data);
+
+//	gnutls_datum_t out;
+//	gnutls_ocsp_resp_t resp;
+//	gnutls_ocsp_resp_init(&resp);
+//	gnutls_ocsp_resp_import(resp, &data);
+//	gnutls_ocsp_resp_print(resp, 0, &out);
+//	gnutls_ocsp_resp_export2(resp, ocsp_resp, GNUTLS_X509_FMT_PEM);
+
+	*pcert = pcrt_stap;
+//	*(pcert+1) = pcrt_+1;
+	*pkey = privkey_stap;
+//	*pcert_length = 2;
+	*pcert_length = 1;
+
+	*ocsp = ocsp_resp;
+	*ocsp_length = 1;
+
+	return 0;
+}
+
 #endif
 
 static int _answer_to_connection(
@@ -723,7 +778,7 @@ static int _http_server_start(int SERVER_MODE)
 #endif
 				,
 				port_num, _check_to_accept, NULL, &_answer_to_connection, NULL,
-				MHD_OPTION_HTTPS_CERT_CALLBACK, &_ocsp_cert_callback,
+				MHD_OPTION_HTTPS_CERT_CALLBACK2, &_ocsp_stap_cert_callback,
 #ifdef MHD_OPTION_STRICT_FOR_CLIENT
 				MHD_OPTION_STRICT_FOR_CLIENT, 1,
 #endif
