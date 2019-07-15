@@ -1,0 +1,78 @@
+PKCS #10 Certificate Request Information:
+	Version: 1
+	Subject: O=gnuwget,OU=Wget,CN=Intermediate
+	Subject Public Key Algorithm: RSA
+	Algorithm Security Level: High (3072 bits)
+		Modulus (bits 3072):
+			00:9d:9f:fb:99:01:3c:62:ce:80:4b:68:b6:6c:87:37
+			09:6b:25:50:01:b1:38:af:7d:45:68:0e:aa:35:b4:5e
+			ff:95:74:79:a2:5c:04:35:97:80:38:bd:6b:d9:9c:b3
+			94:45:18:1f:cf:61:bd:3f:85:41:04:b5:d3:20:d8:0e
+			27:ea:d5:ea:76:5a:9d:81:3b:8b:b6:37:d2:f9:cb:6b
+			db:01:62:c6:50:f2:e4:74:a5:99:46:ce:e9:79:66:73
+			5f:c3:95:7d:66:2b:9f:83:c7:88:92:41:12:92:bf:2f
+			81:88:07:6c:8e:fb:6c:41:ee:7b:4f:64:74:25:38:2f
+			eb:bb:4c:8f:3d:1b:69:05:e4:3f:b1:52:d3:04:e9:a8
+			17:3b:ef:13:61:46:a3:9a:89:84:3d:6d:49:7b:a1:35
+			63:cf:e2:34:7a:25:d1:0c:66:f7:84:5e:86:0f:55:13
+			49:fa:11:e1:c8:b7:1c:b7:a7:ef:9d:d8:b8:a5:5b:01
+			91:df:17:3e:5a:9e:18:33:b2:0e:90:60:7a:3e:1e:0e
+			90:98:66:cb:f8:f1:9f:05:53:68:df:9d:6e:2a:0f:d2
+			2a:33:e0:09:c5:b9:4e:97:b1:7d:08:55:dd:c3:19:e6
+			31:a6:db:2a:cd:18:d0:22:02:0b:5b:39:c8:57:2b:d0
+			bf:45:ff:c2:fa:13:2a:64:d0:42:a0:e9:9a:16:d1:1a
+			9e:ce:57:bb:6a:23:2d:1f:e4:5e:f5:4c:86:6b:dc:12
+			7c:fc:ff:29:ad:6e:6d:2f:8a:2b:bb:8a:02:d7:5d:14
+			7e:46:fa:51:4b:dd:9f:1a:0c:6f:3e:63:78:7c:a5:81
+			ea:f5:a1:30:de:3f:3e:3d:da:39:52:db:3a:9c:09:7e
+			b6:5c:db:2c:25:a2:63:a3:f3:e7:c5:dc:aa:79:c5:e1
+			1f:d9:8e:ac:74:fd:28:13:01:d2:48:cf:70:6a:d7:ee
+			d7:2c:50:cf:19:a8:ff:3c:23:4d:8b:b6:aa:83:03:28
+			a7
+		Exponent (bits 24):
+			01:00:01
+	Signature Algorithm: RSA-SHA256
+	Attributes:
+		Extensions:
+			Basic Constraints (critical):
+				Certificate Authority (CA): TRUE
+			Key Purpose (critical):
+				Time stamping.
+				OCSP signing.
+			Key Usage (critical):
+				Digital signature.
+				Key encipherment.
+				Certificate signing.
+				CRL signing.
+Other Information:
+	Public Key ID:
+		sha1:c07f291f82b1aa85385f750b9b16229e13d23b63
+		sha256:1b372928feda6435ffd468be28e6eb126fe99a839242a93133aaa06aa7452a47
+	Public Key PIN:
+		pin-sha256:GzcpKP7aZDX/1Gi+KObrEm/pmoOSQqkxM6qgaqdFKkc=
+
+Self signature: verified
+
+-----BEGIN NEW CERTIFICATE REQUEST-----
+MIID0jCCAjoCAQAwODEVMBMGA1UEAxMMSW50ZXJtZWRpYXRlMQ0wCwYDVQQLEwRX
+Z2V0MRAwDgYDVQQKEwdnbnV3Z2V0MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIB
+igKCAYEAnZ/7mQE8Ys6AS2i2bIc3CWslUAGxOK99RWgOqjW0Xv+VdHmiXAQ1l4A4
+vWvZnLOURRgfz2G9P4VBBLXTINgOJ+rV6nZanYE7i7Y30vnLa9sBYsZQ8uR0pZlG
+zul5ZnNfw5V9Ziufg8eIkkESkr8vgYgHbI77bEHue09kdCU4L+u7TI89G2kF5D+x
+UtME6agXO+8TYUajmomEPW1Je6E1Y8/iNHol0Qxm94Rehg9VE0n6EeHItxy3p++d
+2LilWwGR3xc+Wp4YM7IOkGB6Ph4OkJhmy/jxnwVTaN+dbioP0ioz4AnFuU6XsX0I
+Vd3DGeYxptsqzRjQIgILWznIVyvQv0X/wvoTKmTQQqDpmhbRGp7OV7tqIy0f5F71
+TIZr3BJ8/P8prW5tL4oru4oC110Ufkb6UUvdnxoMbz5jeHylger1oTDePz492jlS
+2zqcCX62XNssJaJjo/PnxdyqecXhH9mOrHT9KBMB0kjPcGrX7tcsUM8ZqP88I02L
+tqqDAyinAgMBAAGgVTBTBgkqhkiG9w0BCQ4xRjBEMA8GA1UdEwEB/wQFMAMBAf8w
+IAYDVR0lAQH/BBYwFAYIKwYBBQUHAwgGCCsGAQUFBwMJMA8GA1UdDwEB/wQFAwMH
+pgAwDQYJKoZIhvcNAQELBQADggGBAJkY7u5CWZx5YXDhu9NfWqjtnXMDHFbKjU06
+CEVFGBsd0AbsuJTLjv2rSWgsG+NuEl4GxP1dp6sVIvd+KO7z++imYDVIJpiF7OWW
+95ORl9VopznmZf08RKOwOiGGUxw3oA/uZjUhhGbNTSu2nTnr66uRzkjyDnvnJN9z
+CBSwMW/osRrvfKZ8YHG8u8888KI+mlyunF9qfgD5b26KPs32q/xS3MwP3sqdVrMW
+xVAOOXClg4dhv9N9jMMzovwZxvAGCItyQxBP0pYgyr6tQKPWuQ1VElSZPzQHQp2G
+D9/72MRydmunNiyZbRpb2fxX+8lxzOElGVQrkX8nRW+hpWx3pz73QL3wiAeQJ/lF
+3f0ORW0llhxXCQqo2qNn4WMKralxvmSprvnHEo3vcDHimEKZwmkWVq4PUdSUzH/L
+jtL0Cni/Jh5ru/Q342ssCj/dKbE2YprrehI+woDhXNbKdbWMJ0RK7oywmjgcSMRx
+S9jBOJLCDnT00mDxdN8kB7k0Q9MWNw==
+-----END NEW CERTIFICATE REQUEST-----

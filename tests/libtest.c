@@ -341,11 +341,11 @@ static int _ocsp_stap_cert_callback(
 	ocsp_resp = wget_malloc(sizeof(gnutls_datum_t));
 
 	gnutls_privkey_init(&privkey_stap);
-	gnutls_load_file(SRCDIR "/certs/ocsp/x509-serv-key.pem", &data);
+	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &data);
 	gnutls_privkey_import_x509_raw(privkey_stap, &data, GNUTLS_X509_FMT_PEM, NULL, 0);
 	gnutls_free(data.data);
 
-	gnutls_load_file(SRCDIR "/certs/ocsp/x509-serv-cert.pem", &data);
+	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-cert.pem", &data);
 	gnutls_pcert_import_x509_raw(pcrt_stap, &data, GNUTLS_X509_FMT_PEM, 0);
 	gnutls_free(data.data);
 
