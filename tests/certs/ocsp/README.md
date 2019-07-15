@@ -1,5 +1,5 @@
 Generate the root CA key:
-`certtool --generate-privkey --outfile x509-ca-key.pem --rsa`
+`$ certtool --generate-privkey --outfile x509-ca-key.pem --rsa`
 
 Generate the root CA certificate:
 ```
@@ -41,11 +41,11 @@ Will the certificate be used to sign other certificates? (y/N): y
 Will the certificate be used to sign CRLs? (y/N): y
 ```
 Generate the Intermediate CA key:
-`certtool --generate-privkey --outfile x509-interm-key.pem --rsa`
+`$ certtool --generate-privkey --outfile x509-interm-key.pem --rsa`
 
 Generate Intermediate Certificate Signing Request:
 ```
-certtool --generate-request --load-privkey x509-interm-key.pem --outfile x509-interm-cert.csr
+$ certtool --generate-request --load-privkey x509-interm-key.pem --outfile x509-interm-cert.csr
 Generating a PKCS #10 certificate request...
 Common name: Intermediate
 Organizational unit name: Wget
@@ -77,7 +77,7 @@ Is this a TLS web server certificate? (y/N):
 
 Sign Intermediate Certificate:
 ```
-erttool --generate-certificate --load-request x509-interm-cert.csr --load-ca-privkey x509-ca-key.pem --load-ca-certificate x509-ca-cert.pem --outfile x509-interm-cert.pem
+$ certtool --generate-certificate --load-request x509-interm-cert.csr --load-ca-privkey x509-ca-key.pem --load-ca-certificate x509-ca-cert.pem --outfile x509-interm-cert.pem
 Generating a signed certificate...
 Enter the certificate's serial number in decimal (default: 6713793478692987957): 
 
@@ -154,12 +154,10 @@ Start OCSP Server:
 `$ openssl ocsp -index demoCA/index.txt -port 8080 -rsigner x509-interm-cert.pem -rkey x509-interm-key.pem -CA x509-interm-cert.pem -text -out log.txt`
 
 Save Response:
-`openssl ocsp -sha256 -CAfile x509-interm-cert.pem -issuer x509-interm-cert.pem -cert x509-server-cert.pem -url http://127.0.0.1:8080 -resp_text -noverify -out ocsp_stapled_resp.der`
+`$ openssl ocsp -sha256 -CAfile x509-interm-cert.pem -issuer x509-interm-cert.pem -cert x509-server-cert.pem -url http://127.0.0.1:8080 -noverify -resp_text -respout ocsp_stapled_resp.der`
 
 BIBLIOGRAPHY
 ===
 1. https://medium.com/@bhashineen/create-your-own-ocsp-server-ffb212df8e63
 2. https://gitlab.com/gnuwget/wget/blob/master/tests/certs/create-certs.sh
 3. https://gitlab.com/gnuwget/wget2/blob/master/tests/certs/README
-
-
