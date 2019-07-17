@@ -108,7 +108,7 @@ static gnutls_pcert_st *pcrt_stap;
 static gnutls_privkey_t *privkey;
 static gnutls_privkey_t privkey_stap;
 
-static gnutls_datum_t *ocsp_resp;
+static gnutls_ocsp_data_st *ocsp_resp;
 
 static const char
 	*ocsp_resp_file;
@@ -330,7 +330,7 @@ static int _ocsp_stap_cert_callback(
 	const struct gnutls_cert_retr_st *info G_GNUC_WGET_UNUSED,
 	gnutls_pcert_st **pcert,
 	unsigned int *pcert_length,
-	gnutls_datum_t **ocsp,
+	gnutls_ocsp_data_st **ocsp,
 	unsigned int *ocsp_length,
 	gnutls_privkey_t *pkey,
 	unsigned int *flags G_GNUC_WGET_UNUSED)
@@ -338,7 +338,7 @@ static int _ocsp_stap_cert_callback(
 	gnutls_datum_t data;
 
 	pcrt_stap = wget_malloc(sizeof(gnutls_pcert_st));
-	ocsp_resp = wget_malloc(sizeof(gnutls_datum_t));
+	ocsp_resp = wget_malloc(sizeof(gnutls_ocsp_data_st));
 
 	gnutls_privkey_init(&privkey_stap);
 	gnutls_load_file(SRCDIR "/certs/ocsp/x509-server-key.pem", &data);
@@ -353,8 +353,15 @@ static int _ocsp_stap_cert_callback(
 //	gnutls_pcert_import_x509_raw(pcrt_+1, &data, GNUTLS_X509_FMT_PEM, 0);
 //	gnutls_free(data.data);
 
-	gnutls_load_file(SRCDIR "/certs/ocsp/ocsp_stapled_resp.der", ocsp_resp);
-//	gnutls_load_file(SRCDIR "/certs/ocsp/ocsp_stapled_resp1.der", &data);
+	//int x = gnutls_load_file(SRCDIR "/certs/ocsp/ocsp_stapled_resp.der", ocsp_resp);
+	//ocsp_resp->response.data = (void*) "\xff\xff\xf0\xf0\xff\xff\xf0\xf0\xff\xff\xf0\xf0\xff\xff\xf0\xf0";
+//       ocsp_resp->response.size = 16;
+//       ocsp_resp->exptime = 0;
+	
+	gnutls_load_file(SRCDIR "/certs/ocsp/ocsp_stapled_resp.der", &data);
+	ocsp_resp->response.data = data.data;
+	ocsp_resp->response.size = data.size;
+	ocsp_resp->exptime = 0;
 
 //	gnutls_datum_t out;
 //	gnutls_ocsp_resp_t resp;
@@ -783,6 +790,7 @@ static int _http_server_start(int SERVER_MODE)
 				MHD_OPTION_STRICT_FOR_CLIENT, 1,
 #endif
 				MHD_OPTION_CONNECTION_MEMORY_LIMIT, (size_t) 1*1024*1024,
+				MHD_OPTION_HTTPS_PRIORITIES, "NORMAL:+SIGN-RSA-SHA256",
 				MHD_OPTION_END);
 
 			gnutls_datum_t data;
