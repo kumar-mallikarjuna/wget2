@@ -109,7 +109,7 @@ Create Index for Signing Certificates:
 $ mkdir -p demoCA/newcerts
 $ touch demoCA/index.txt
 $ touch demoCA/index.txt.attr
-$ echo '1' > demoCA/serial
+$ echo '01' > demoCA/serial
 ```
 
 Create a template configuration file:

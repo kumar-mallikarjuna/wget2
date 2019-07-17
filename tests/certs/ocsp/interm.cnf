@@ -345,7 +345,12 @@ tsa_name		= yes	# Must the TSA name be included in the reply?
 ess_cert_id_chain	= no	# Must the ESS cert id chain be included?
 				# (optional, default: no)
 
-[ v3_OCSP ]
-basicConstraints = CA:FALSE
-keyUsage = nonRepudiation, digitalSignature, keyEncipherment
-extendedKeyUsage = OCSPSigning
+#[ v3_root ]
+#basicConstraints = critical, CA:true
+#extendedKeyUsage = critical, OCSPSigning, timeStamping
+#keyUsage = critical, keyCertSign, cRLSign
+
+[ v3_intermediate ]
+basicConstraints = critical, CA:true
+extendedKeyUsage = critical, OCSPSigning, timeStamping
+keyUsage = critical, keyCertSign, cRLSign

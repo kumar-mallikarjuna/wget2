@@ -1,62 +1,75 @@
-Certificate Request:
-    Data:
-        Version: 1 (0x0)
-        Subject: C=IN, ST=State, L=City, O=gnuwget, OU=Wget, CN=localhost/emailAddress=end@localhost
-        Subject Public Key Info:
-            Public Key Algorithm: rsaEncryption
-                RSA Public-Key: (2048 bit)
-                Modulus:
-                    00:a2:5d:9c:19:5d:42:87:f8:e1:a7:91:c4:d7:e8:
-                    03:19:6a:30:69:1e:e7:38:9c:f7:9f:26:6e:5a:1e:
-                    56:4a:94:3e:7a:bc:71:1a:bd:56:f6:4a:55:8b:33:
-                    62:25:d6:6c:f9:78:ca:15:72:49:8b:4f:45:1a:e6:
-                    ed:53:a9:f1:dd:7c:d8:a8:78:f3:c1:fa:ee:04:8d:
-                    01:35:f9:aa:2c:3b:5c:a4:36:42:ad:8d:0c:ac:00:
-                    27:73:92:d3:60:be:8a:97:54:c6:dd:4b:47:56:5f:
-                    14:81:79:24:6b:70:c6:5c:e2:17:3f:8a:81:42:fd:
-                    67:be:af:8f:d3:bc:9d:6a:6c:c7:f0:2c:d3:d8:1a:
-                    79:eb:17:25:6f:57:30:b8:db:df:dc:13:22:3d:23:
-                    0e:e4:d7:01:60:01:2d:ff:db:f2:de:4d:ac:18:88:
-                    be:85:5c:4c:05:62:22:92:75:69:47:c7:df:26:bb:
-                    a9:0e:fa:51:1a:df:a3:69:e2:00:8c:08:ec:d6:9d:
-                    ef:02:37:4f:6c:36:4e:b4:fb:30:3e:8a:45:cd:5c:
-                    bf:e7:0b:d8:ea:99:8c:82:a9:8c:ea:bc:e5:d7:76:
-                    be:46:32:e7:2e:ea:cf:72:e0:d3:81:0f:9b:5b:9c:
-                    88:4d:ec:c1:b7:fa:68:4c:44:ac:6f:27:ba:85:e9:
-                    d1:91
-                Exponent: 65537 (0x10001)
-        Attributes:
-            a0:00
-    Signature Algorithm: sha256WithRSAEncryption
-         07:9e:86:f5:1c:79:05:3e:35:16:43:c9:c2:78:20:a1:6d:2c:
-         12:49:85:29:13:e2:e6:fb:d1:e3:92:59:af:70:91:73:34:ca:
-         a2:4e:b2:f4:1c:bd:6c:27:ce:fc:cd:83:d8:13:45:82:2b:eb:
-         c4:f0:2a:c8:4a:15:03:47:69:ea:cb:d5:08:62:d9:dc:ea:80:
-         f6:ba:c3:91:96:5c:b7:39:bc:d8:c8:a3:a7:56:0f:ce:ca:9b:
-         4a:c7:b2:d8:b7:a0:10:39:52:51:60:07:52:02:68:d1:99:12:
-         83:50:ca:b6:03:8e:3b:a6:cb:2f:7c:0a:d8:c7:0d:1c:8b:94:
-         d1:c2:6f:12:34:ad:b8:87:1d:09:02:05:1a:e4:4c:65:83:81:
-         e6:96:95:07:c7:49:fe:59:2c:55:1a:fa:05:8f:ca:7d:99:1f:
-         3c:6a:8e:71:f8:5e:01:79:1a:52:0f:b1:e3:45:a2:ff:f4:67:
-         7a:11:b6:86:b1:43:dd:9a:67:5f:63:82:d4:cf:ae:e2:1e:b1:
-         1e:9a:36:9a:76:12:60:d4:76:67:d7:dd:6e:a5:f9:36:50:c3:
-         3a:c8:93:b8:5e:a4:62:6d:48:df:77:09:04:0e:d2:47:2a:e7:
-         93:96:d6:4c:bb:e1:9f:b3:73:8c:ef:20:ad:71:2e:e2:c5:21:
-         83:17:cc:76
------BEGIN CERTIFICATE REQUEST-----
-MIICxDCCAawCAQAwfzELMAkGA1UEBhMCSU4xDjAMBgNVBAgMBVN0YXRlMQ0wCwYD
-VQQHDARDaXR5MRAwDgYDVQQKDAdnbnV3Z2V0MQ0wCwYDVQQLDARXZ2V0MRIwEAYD
-VQQDDAlsb2NhbGhvc3QxHDAaBgkqhkiG9w0BCQEWDWVuZEBsb2NhbGhvc3QwggEi
-MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCiXZwZXUKH+OGnkcTX6AMZajBp
-Huc4nPefJm5aHlZKlD56vHEavVb2SlWLM2Il1mz5eMoVckmLT0Ua5u1TqfHdfNio
-ePPB+u4EjQE1+aosO1ykNkKtjQysACdzktNgvoqXVMbdS0dWXxSBeSRrcMZc4hc/
-ioFC/We+r4/TvJ1qbMfwLNPYGnnrFyVvVzC429/cEyI9Iw7k1wFgAS3/2/LeTawY
-iL6FXEwFYiKSdWlHx98mu6kO+lEa36Np4gCMCOzWne8CN09sNk60+zA+ikXNXL/n
-C9jqmYyCqYzqvOXXdr5GMucu6s9y4NOBD5tbnIhN7MG3+mhMRKxvJ7qF6dGRAgMB
-AAGgADANBgkqhkiG9w0BAQsFAAOCAQEAB56G9Rx5BT41FkPJwnggoW0sEkmFKRPi
-5vvR45JZr3CRczTKok6y9By9bCfO/M2D2BNFgivrxPAqyEoVA0dp6svVCGLZ3OqA
-9rrDkZZctzm82Mijp1YPzsqbSsey2LegEDlSUWAHUgJo0ZkSg1DKtgOOO6bLL3wK
-2McNHIuU0cJvEjStuIcdCQIFGuRMZYOB5paVB8dJ/lksVRr6BY/KfZkfPGqOcfhe
-AXkaUg+x40Wi//RnehG2hrFD3ZpnX2OC1M+u4h6xHpo2mnYSYNR2Z9fdbqX5NlDD
-OsiTuF6kYm1I33cJBA7SRyrnk5bWTLvhn7NzjO8grXEu4sUhgxfMdg==
------END CERTIFICATE REQUEST-----
+PKCS #10 Certificate Request Information:
+	Version: 1
+	Subject: O=gnuwget,OU=Wget,CN=localhost
+	Subject Public Key Algorithm: RSA
+	Algorithm Security Level: High (3072 bits)
+		Modulus (bits 3072):
+			00:cf:6f:73:bf:b2:5f:85:2b:c9:c2:be:9c:95:dc:53
+			52:b0:99:a0:ed:ad:72:bf:e0:65:a5:c1:15:a8:32:82
+			c2:38:7f:75:22:6b:e8:9a:7f:78:b0:bf:94:f3:d0:f8
+			56:60:21:e3:fa:16:af:b1:78:ac:db:21:35:c0:50:18
+			24:4a:a3:a1:c4:f1:ca:63:cb:ec:c0:fd:a6:aa:42:48
+			98:3c:ed:10:60:8f:2d:19:45:b2:3f:ba:8b:f6:f9:09
+			b8:ce:c5:ff:34:a0:bb:28:49:be:a7:02:36:9f:8c:0e
+			3f:33:f0:b7:04:dd:e0:3d:03:61:e7:32:0b:d6:f9:27
+			89:dc:39:69:3b:ad:b5:65:40:e6:8b:56:35:f9:79:07
+			90:59:26:cd:48:7c:be:4b:87:8d:69:c5:71:c9:f1:61
+			ed:85:82:c2:19:48:51:b9:ef:c9:f7:45:88:a4:b7:80
+			8d:5e:3c:1b:a4:cc:6d:c9:4a:48:5f:80:55:65:e6:34
+			ec:71:88:b4:a2:8f:00:31:e5:5b:2d:20:44:83:f2:0b
+			be:d1:92:48:8e:c7:01:50:67:de:4a:c7:e8:c7:7d:d1
+			ed:dd:9a:20:6c:5c:b7:28:ae:59:f2:47:b2:1e:9e:1a
+			55:69:aa:c8:8c:a3:11:48:21:6f:69:fa:d4:48:7e:eb
+			d3:5d:08:1c:a1:e9:30:af:f5:f4:00:45:a8:a4:07:48
+			a3:e1:7d:87:d0:01:95:e3:33:49:d9:47:74:d1:e1:81
+			3f:5c:b2:34:58:c0:91:3f:dd:f4:9e:3f:d3:f8:30:a1
+			cd:0b:8a:d2:1b:c8:85:cd:3a:9e:ff:49:88:b5:22:7f
+			d8:5f:c4:20:0a:7d:65:69:ff:8e:1e:34:bd:ea:67:ad
+			df:38:99:28:1b:f1:dc:c5:83:20:d6:9d:3f:96:67:50
+			92:ab:a0:3f:29:48:a6:33:94:e5:b1:df:86:fc:eb:30
+			6e:ae:e2:35:e6:2c:a2:15:1a:1a:d0:f3:ee:95:34:68
+			31
+		Exponent (bits 24):
+			01:00:01
+	Signature Algorithm: RSA-SHA256
+	Attributes:
+		Extensions:
+			Basic Constraints (critical):
+				Certificate Authority (CA): FALSE
+			Key Purpose (critical):
+				Time stamping.
+				OCSP signing.
+			Key Usage (critical):
+				Digital signature.
+Other Information:
+	Public Key ID:
+		sha1:695d43e64a7824c372469fb46a2b998d4cdddbf4
+		sha256:50afea6e21d529fbb1c24b844c554de47fb75a30cddf07fbed92c7c0023e6e5f
+	Public Key PIN:
+		pin-sha256:UK/qbiHVKfuxwkuETFVN5H+3WjDN3wf77ZLHwAI+bl8=
+
+Self signature: verified
+
+-----BEGIN NEW CERTIFICATE REQUEST-----
+MIIDzDCCAjQCAQAwNTESMBAGA1UEAxMJbG9jYWxob3N0MQ0wCwYDVQQLEwRXZ2V0
+MRAwDgYDVQQKEwdnbnV3Z2V0MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKC
+AYEAz29zv7JfhSvJwr6cldxTUrCZoO2tcr/gZaXBFagygsI4f3Uia+iaf3iwv5Tz
+0PhWYCHj+havsXis2yE1wFAYJEqjocTxymPL7MD9pqpCSJg87RBgjy0ZRbI/uov2
++Qm4zsX/NKC7KEm+pwI2n4wOPzPwtwTd4D0DYecyC9b5J4ncOWk7rbVlQOaLVjX5
+eQeQWSbNSHy+S4eNacVxyfFh7YWCwhlIUbnvyfdFiKS3gI1ePBukzG3JSkhfgFVl
+5jTscYi0oo8AMeVbLSBEg/ILvtGSSI7HAVBn3krH6Md90e3dmiBsXLcorlnyR7Ie
+nhpVaarIjKMRSCFvafrUSH7r010IHKHpMK/19ABFqKQHSKPhfYfQAZXjM0nZR3TR
+4YE/XLI0WMCRP930nj/T+DChzQuK0hvIhc06nv9JiLUif9hfxCAKfWVp/44eNL3q
+Z63fOJkoG/HcxYMg1p0/lmdQkqugPylIpjOU5bHfhvzrMG6u4jXmLKIVGhrQ8+6V
+NGgxAgMBAAGgUjBQBgkqhkiG9w0BCQ4xQzBBMAwGA1UdEwEB/wQCMAAwIAYDVR0l
+AQH/BBYwFAYIKwYBBQUHAwgGCCsGAQUFBwMJMA8GA1UdDwEB/wQFAwMHgAAwDQYJ
+KoZIhvcNAQELBQADggGBABiVgy9lPZYE6WkQa+FmswlNRCj2JKgd31TNmbVvsiHt
+5BxqGvO0fOe3Rr+5z8o5JfStyw4Wf0ZAVx6lK6lwaUYy+CeuARhvNIJ4IkptpeRR
+MltM7DZgt3+C2nMTidYfH9669kNA0wNrTUsf841PudQs+UoENGoudxWEkdLIq62Q
+1Eg8szTmsHogvoaUB6IiYTiBQbuEKVdCDbiDyIsK34Kvgfrdz4A6lsllInao5N8Q
+MtNzVoR/5PO++NRx5BCfCYZVNOrmhjW2DV+q4dkYZXQqEh5fPe/uRkGHwMzVnrxu
+kclKSKhbiVjdtC+w9aRxJjM43RVcahAcpUBvNlMbIO4fbZ5mfh2+SxmnQj9GuIlN
+eVH4220HHY4QI3jLOQWh/KSgI/7ItdTB+fn9ESBDDMmdqC0+AZydDyHzkgpTroS/
+pxp6sUeqzdw6py8kYEcZ/L3TiYe1LSFUJbrgfBnsMYxDnI4vhl4YPbOJQK2+7Va8
+OsIq6Ns2qXmssAgei02ICA==
+-----END NEW CERTIFICATE REQUEST-----
